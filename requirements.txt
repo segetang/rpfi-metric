@@ -1,0 +1,44 @@
+# Curated from an actual `conda activate mamba && pip freeze` dump on the training
+# machine (env name `mamba`, confirmed 2026-07-27), keeping ONLY packages the RPFI
+# pipeline actually imports. The raw freeze included many unrelated packages
+# (tensorflow/keras, transformers/diffusers/xformers, PyQt6, jupyter*, boto3,
+# ONE-api/iblutil, etc.) from a shared environment used for other projects — stripped
+# out here. This file covers dataset splitting / model training / RPFI evaluation /
+# analysis scripts (i.e. everything except roi_extract.py — see note below).
+#
+# STILL OPEN:
+# STILL OPEN:
+#   - `face_recognition` / `dlib` (used only by src/preprocessing/roi_extract.py):
+#     checked all 4 local conda envs (mamba, mamba2, deca, base) — not installed in
+#     any of them. The environment this originally ran in no longer exists locally,
+#     so the exact version cannot be recovered. Documented as an honest gap in
+#     README §2/§3 rather than guessed. If ROI extraction needs to be re-run, install
+#     `face_recognition` + `dlib` fresh (note: dlib often needs cmake + a C++ compiler
+#     to build from source on Windows/WSL — see face_recognition's install docs).
+#   - torch==2.9.1 + torchaudio==2.5.1 (seen in the original raw freeze) is a
+#     version-mismatched pair (torchaudio 2.5.1 predates torch 2.9). torchaudio isn't
+#     used anywhere in the RPFI pipeline, so it's omitted below.
+
+numpy==2.2.5
+scipy==1.15.3
+pandas==2.3.3
+scikit-learn==1.7.2
+matplotlib==3.10.8
+opencv-python==4.12.0.88
+Pillow==12.0.0
+PyYAML==6.0.3
+tqdm==4.67.1
+
+torch==2.9.1
+torchvision==0.20.1
+
+mamba-ssm==2.3.0         # optional: only needed for Mamba/BiMamba models (lazy-imported)
+einops==0.8.1
+
+# --- ROI extraction (roi_extract.py) — face_recognition / dlib version UNKNOWN.
+#     Checked all local conda envs (mamba, mamba2, deca, base) — not installed in any
+#     of them. The environment this originally ran in no longer exists locally.
+#     Install separately if you need to re-run roi_extract.py; version not pinned here.
+#     See README §2 for the honest disclosure of this gap.
+# face_recognition
+# dlib

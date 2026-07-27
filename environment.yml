@@ -1,0 +1,45 @@
+# RPFI reference environment — curated from an actual `conda env export` / `pip freeze`
+# on the training machine (env name `mamba`, confirmed 2026-07-27), stripped of unrelated
+# packages that came from the shared "mamba" conda env (tensorflow/keras, transformers/
+# diffusers/xformers, PyQt6, jupyter*, boto3, ONE-api/iblutil, etc. — none of these are
+# used by RPFI).
+#
+# This env covers dataset splitting / model training / RPFI evaluation / analysis
+# scripts (i.e. everything except roi_extract.py).
+#
+# STILL OPEN:
+# STILL OPEN:
+#   - face_recognition / dlib (used only by src/preprocessing/roi_extract.py): checked
+#     all 4 local conda envs (mamba, mamba2, deca, base) — not installed in any of them.
+#     The environment this originally ran in no longer exists locally, so the exact
+#     version cannot be recovered. Documented as an honest gap in README §2/§3 rather
+#     than guessed.
+#   - torch==2.9.1 requires CUDA 12.8-compatible drivers per the nvidia-cu12 wheels in
+#     the original freeze; adjust pytorch-cuda below to match your actual CUDA toolkit.
+
+name: mamba
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy=2.2.5
+  - scipy=1.15.3
+  - pandas=2.3.3
+  - scikit-learn=1.7.2
+  - matplotlib=3.10.8
+  - pillow=12.0.0
+  - pyyaml=6.0.3
+  - tqdm=4.67.1
+  - pip
+  - pip:
+      - torch==2.9.1
+      - torchvision==0.20.1
+      - opencv-python==4.12.0.88
+      - mamba-ssm==2.3.0    # optional: only needed for Mamba/BiMamba models (lazy-imported)
+      - einops==0.8.1
+      # face_recognition / dlib: version unknown, see STILL OPEN note above.
+      # - face_recognition
+      # - dlib
