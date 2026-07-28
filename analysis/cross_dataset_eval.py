@@ -25,14 +25,37 @@ K개 fold 체크포인트를 전부 쓰면 "K번 반복측정"이 되어, cross-
 rpfi_eval.py를 그대로 --dataset {target} --runs runs/cross_{source}_to_{target} 로
 돌리면 채점된다(수정 불필요).
 
-⚠️ fs가 다른 데이터셋 간 이동 시 주의
-----------------------------------------
+★ fs가 다른 데이터셋 간 이동 시 리샘플링 보정 (v2)
+----------------------------------------------------
 UBFC/PURE는 fs=30(seq_len=300=10초), COHFACE는 fs=20(seq_len=200=10초)이다.
-이 스크립트는 source 모델이 학습된 seq_len(샘플 개수)을 그대로 target 신호에
-적용한다 — 즉 UBFC→COHFACE 방향이면 COHFACE 신호를 300샘플(=15초, 10초 아님)
-단위로 잘라 추론한다. 초 단위를 맞추려면 리샘플링이 필요한데, 이번 실험은
-"모델이 학습한 샘플 단위 패턴이 새 데이터셋에도 통하는가"를 보는 것이 목적이라
-리샘플링 없이 진행한다. 이 사실은 반드시 논문 텍스트에 명시할 것.
+모델은 seq_len을 "샘플 개수"로 고정해 학습되므로, source seq_len을 target 신호에
+그대로(리샘플링 없이) 적용하면 물리적 윈도우 길이가 어긋난다 — 예를 들어
+COHFACE(fs=20)로 학습한 모델을 UBFC(fs=30)에 적용할 때 seq_len=200을 그대로 쓰면
+200/30=6.67초 분량만 보게 되고, 반대로 UBFC/PURE(fs=30)로 학습한 모델을
+COHFACE(fs=20)에 적용하면 300/20=15초 분량을 보게 된다 — 둘 다 모델이 학습 때
+경험한 "10초"라는 물리적 컨텍스트를 벗어난다.
+
+v1(최초 버전)은 이 사실을 몰랐던 게 아니라 "리샘플링 없이 원시 샘플 패턴이
+새 데이터셋에도 통하는지를 본다"는 의도적 설계였지만, 이후 진단
+(a_crossdirection_volatility.csv, e_structural_mismatch.csv, d_signaldiag_*.csv)에서
+이 윈도우 불일치가 실제로 physdiff 같은 고정길이 의존 아키텍처의 cross-dataset
+변동성을 지배적으로 설명한다는 게 드러나 — "일반화 실패"와 "윈도우 아티팩트"가
+뒤섞여 해석 불가능해지는 문제가 있었다. v2는 이를 제거한다:
+
+  1. target 신호(t_x)를 추론 직전에 target_fs → source_fs로 유리수비
+     리샘플링(scipy.signal.resample_poly)해, 모델이 항상 물리적으로 정확히
+     10초(=source_fs*10 샘플)를 보게 만든다.
+  2. 모델 출력(예측)을 다시 source_fs → target_fs로 리샘플링해 되돌린다 —
+     target_label(t_y)과 길이/샘플링이 맞아야 rpfi_eval.py가 target 데이터셋
+     고유의 chunk 구조로 그대로 채점할 수 있기 때문이다.
+  3. 리샘플링 반올림 오차(최대 몇 샘플)는 t_y 길이에 맞춰 자르거나 마지막 값을
+     이어붙여 보정한다(match_length).
+
+같은 fs끼리(pure↔ubfc)는 리샘플링이 항등변환이라 v1과 결과가 동일하다 —
+재실행이 필요한 건 COHFACE가 source 또는 target인 4방향뿐이다.
+
+--no-resample 플래그로 v1(구버전, 원시 샘플 그대로) 동작을 재현할 수 있다 —
+보정 전/후 영향을 정량적으로 보여주고 싶을 때 ablation 용도로 사용.
 
 사용법 (한 방향)
 ----------------
@@ -45,21 +68,60 @@ UBFC/PURE는 fs=30(seq_len=300=10초), COHFACE는 fs=20(seq_len=200=10초)이다
         --out runs
 
 6방향 전부 원하면 이 커맨드를 source/target 조합만 바꿔 6번 실행할 것
-(아래 run_all_directions.sh 예시 참고).
+(아래 run_all_directions.sh 예시 참고). fs가 같은 pure↔ubfc 2방향은 v1 결과를
+그대로 써도 무방하다(리샘플링이 no-op이므로 재실행해도 수치는 동일).
 """
 
 import argparse
 import json
+import math
 import re
 from pathlib import Path
 
 import numpy as np
 import torch
+from scipy.signal import resample_poly
 
 from models import build_model
 from subject_split_v2 import load_cv, extract_by_ranges
 from train_models import predict_test, eval_metrics
 from rpfi_eval import discover_models, FS_BY_DATASET
+
+
+# ══════════════════════════════════════════════════════════════════
+# fs 불일치 보정 — 물리적 윈도우 길이 보존
+# ══════════════════════════════════════════════════════════════════
+
+def resample_signal(x, fs_from, fs_to):
+    """1D 신호를 fs_from → fs_to 로 유리수비(rational) 리샘플링한다.
+    물리적 지속시간(초)을 보존하는 것이 목적이며, 표본 개수는 fs 비율에 맞춰 바뀐다.
+    fs_from == fs_to 이거나 빈 배열이면 그대로 반환(no-op)."""
+    x = np.asarray(x, dtype=np.float64)
+    if fs_from == fs_to or len(x) == 0:
+        return x.astype(np.float32)
+    g = math.gcd(int(fs_from), int(fs_to))
+    up, down = int(fs_to // g), int(fs_from // g)
+    y = resample_poly(x, up, down)
+    return y.astype(np.float32)
+
+
+def resample_recordings(x_list, fs_from, fs_to):
+    """recording별 1D 배열 리스트 전체에 resample_signal을 적용."""
+    return [resample_signal(x, fs_from, fs_to) for x in x_list]
+
+
+def match_length(x, target_len):
+    """리샘플링 반올림 오차(최대 몇 샘플) 보정: target_len에 맞춰 자르거나
+    마지막 값을 이어붙여 채운다(zero-pad 대신 edge-pad — 생리 신호에 인위적
+    불연속을 만들지 않기 위함)."""
+    n = len(x)
+    if n == target_len:
+        return x
+    if n > target_len:
+        return x[:target_len]
+    pad_val = x[-1] if n > 0 else np.float32(0.0)
+    pad = np.full(target_len - n, pad_val, dtype=x.dtype)
+    return np.concatenate([x, pad])
 
 
 def full_coverage(cv):
@@ -84,12 +146,24 @@ def resolve_ckpt(raw_path, src_runs):
     raise SystemExit(f"체크포인트를 찾을 수 없습니다: {raw_path} (시도한 대체 경로: {ck2})")
 
 
-def process_blend_model(model_name, src_runs, args, t_x, t_y, t_ranges, t_subj_of, device, out_dir):
+def _postprocess_preds(preds_raw, t_y, fs_source, fs_target, resample_needed):
+    """모델 출력(source_fs)을 target_fs로 되돌리고 t_y 길이에 맞춘다.
+    resample_needed=False면 원본 그대로(v1과 동일 동작)."""
+    if not resample_needed:
+        return preds_raw
+    return [match_length(resample_signal(p, fs_source, fs_target), len(y))
+            for p, y in zip(preds_raw, t_y)]
+
+
+def process_blend_model(model_name, src_runs, args, t_x_model_input, t_y, t_ranges, t_subj_of,
+                         device, out_dir, fs_source, fs_target, resample_needed):
     """bimamba_blend는 fold당 단일 .pth가 아니라 inner 모델 K_inner개 + blend_weights로
     구성돼있다(train_bimamba_blend.py 참고). info.json의 inner_models[i]['ckpt']를 각각
     불러와 target에 추론한 뒤, 저장된 blend_weights로 가중합한다.
     ※ info.json에 seq_len이 저장돼있지 않아(v2 설계 당시 누락), source 데이터셋의
-      표준 관례(FS_BY_DATASET[source]*10초)로 역산한다 — 다른 모델들과 동일한 값이다."""
+      표준 관례(FS_BY_DATASET[source]*10초)로 역산한다 — 다른 모델들과 동일한 값이다.
+    ※ 리샘플링은 inner 모델별로 반복하지 않고, blend 이후 최종 예측 1회에만 적용한다
+      (inner 모델 전부 동일 아키텍처/seq_len이라 입력 쪽은 이미 t_x_model_input로 통일됨)."""
     seq_len = FS_BY_DATASET[args.source_dataset] * 10
     info_files = sorted(src_runs.glob(f"{model_name}_f*_info.json"),
                         key=lambda p: int(re.search(r"_f(\d+)_info\.json$", p.name).group(1)))
@@ -108,18 +182,21 @@ def process_blend_model(model_name, src_runs, args, t_x, t_y, t_ranges, t_subj_o
             ck = resolve_ckpt(im["ckpt"], src_runs)
             m = build_model("bimamba").to(device)   # blend의 inner는 항상 bimamba 아키텍처
             m.load_state_dict(torch.load(ck, map_location=device))
-            preds_per_inner.append(predict_test(m, t_x, seq_len, device, batch=args.batch))
+            preds_per_inner.append(predict_test(m, t_x_model_input, seq_len, device, batch=args.batch))
 
-        final_preds = []
-        for rec_i in range(len(t_x)):
+        final_preds_raw = []
+        for rec_i in range(len(t_x_model_input)):
             acc = np.zeros_like(preds_per_inner[0][rec_i])
             for w, mp in zip(weights, preds_per_inner):
                 acc = acc + w * mp[rec_i]
-            final_preds.append(acc.astype(np.float32))
+            final_preds_raw.append(acc.astype(np.float32))
+
+        final_preds = _postprocess_preds(final_preds_raw, t_y, fs_source, fs_target, resample_needed)
 
         metrics = eval_metrics(t_y, final_preds)
+        resample_tag = f"resampled({fs_source}→{fs_target}Hz)" if resample_needed else "no-resample"
         print(f"  [{model_name} src_f{fold}] seq_len={seq_len} (K_inner={len(inner_models)}, "
-              f"역산값 — info.json에 미저장)  Pearson={metrics['pearson_mean']:+.4f}  "
+              f"역산값 — info.json에 미저장) {resample_tag}  Pearson={metrics['pearson_mean']:+.4f}  "
               f"RMSE={metrics['rmse']:.4f}  n_rec={metrics['n_recordings']}")
 
         np.save(out_dir / f"{model_name}_f{fold}_test_pred.npy",
@@ -129,6 +206,8 @@ def process_blend_model(model_name, src_runs, args, t_x, t_y, t_ranges, t_subj_o
             source_dataset=args.source_dataset, target_dataset=args.target_dataset,
             source_ckpts=[str(resolve_ckpt(im["ckpt"], src_runs)) for im in inner_models],
             blend_weights=info["blend_weights"], seq_len=int(seq_len),
+            fs_source=int(fs_source), fs_target=int(fs_target),
+            resampled=bool(resample_needed), window_seconds=10.0,
             test_ranges=[list(r) for r in t_ranges],
             test_subject_of_range=t_subj_of,
             test_rec_lengths=[int(len(p)) for p in final_preds],
@@ -153,6 +232,9 @@ def main():
     ap.add_argument("--models", default=None, help="콤마 구분. 미지정시 source-runs에서 자동 탐색")
     ap.add_argument("--out", default="runs")
     ap.add_argument("--batch", type=int, default=64)
+    ap.add_argument("--no-resample", action="store_true",
+                    help="fs가 달라도 리샘플링하지 않고 v1(구버전) 방식대로 원시 샘플 수 그대로 "
+                         "windowing한다 — 보정 전/후 비교용 ablation 옵션. 기본값은 리샘플링 적용(권장).")
     args = ap.parse_args()
 
     if args.source_dataset == args.target_dataset:
@@ -167,6 +249,23 @@ def main():
     t_x = extract_by_ranges(target_pred, t_ranges)
     t_y = extract_by_ranges(target_label, t_ranges)
     n_target_subjects = len(set(t_subj_of))
+
+    fs_source = FS_BY_DATASET[args.source_dataset]
+    fs_target = FS_BY_DATASET[args.target_dataset]
+    resample_needed = (fs_source != fs_target) and not args.no_resample
+
+    if fs_source != fs_target and args.no_resample:
+        print(f"  ⚠ --no-resample 지정됨: fs 불일치({fs_source}Hz→{fs_target}Hz)를 보정하지 않고 "
+              f"v1 방식(원시 샘플 수 그대로)으로 진행합니다 — 물리적 윈도우 길이가 "
+              f"{fs_source * 10 / fs_target:.2f}초로 어긋난 채 평가됩니다(ablation 목적일 때만 사용).")
+        t_x_model_input = t_x
+    elif resample_needed:
+        print(f"  ℹ fs 불일치 감지({args.source_dataset}={fs_source}Hz vs "
+              f"{args.target_dataset}={fs_target}Hz) — 모델 입력을 {fs_source}Hz로 리샘플링해 "
+              f"물리적 10초 윈도우를 보존하고, 예측을 다시 {fs_target}Hz로 되돌려 채점합니다.")
+        t_x_model_input = resample_recordings(t_x, fs_target, fs_source)
+    else:
+        t_x_model_input = t_x  # fs 동일 → no-op, v1과 완전히 동일한 결과
 
     src_runs = Path(args.source_runs)
     models = ([m.strip() for m in args.models.split(",") if m.strip()]
@@ -185,8 +284,8 @@ def main():
     for model_name in models:
         if model_name == "bimamba_blend":
             summary.extend(process_blend_model(model_name, src_runs, args,
-                                               t_x, t_y, t_ranges, t_subj_of,
-                                               device, out_dir))
+                                               t_x_model_input, t_y, t_ranges, t_subj_of,
+                                               device, out_dir, fs_source, fs_target, resample_needed))
             continue
 
         # "{model}_f{digits}.pth"에 정확히 일치하는 것만 (bimamba_blend의 "_f0_inner0.pth"
@@ -215,10 +314,12 @@ def main():
             model = build_model(model_name).to(device)
             model.load_state_dict(torch.load(ck, map_location=device))
 
-            preds = predict_test(model, t_x, seq_len, device, batch=args.batch)
+            preds_raw = predict_test(model, t_x_model_input, seq_len, device, batch=args.batch)
+            preds = _postprocess_preds(preds_raw, t_y, fs_source, fs_target, resample_needed)
             metrics = eval_metrics(t_y, preds)
 
-            print(f"  [{model_name} src_f{fold}] seq_len={seq_len}  "
+            resample_tag = f"resampled({fs_source}→{fs_target}Hz)" if resample_needed else "no-resample"
+            print(f"  [{model_name} src_f{fold}] seq_len={seq_len} {resample_tag}  "
                   f"Pearson={metrics['pearson_mean']:+.4f}  RMSE={metrics['rmse']:.4f}  "
                   f"n_rec={metrics['n_recordings']}")
 
@@ -228,6 +329,8 @@ def main():
                 model=model_name, fold=fold,
                 source_dataset=args.source_dataset, target_dataset=args.target_dataset,
                 source_ckpt=str(ck), seq_len=int(seq_len),
+                fs_source=int(fs_source), fs_target=int(fs_target),
+                resampled=bool(resample_needed), window_seconds=10.0,
                 test_ranges=[list(r) for r in t_ranges],
                 test_subject_of_range=t_subj_of,
                 test_rec_lengths=[int(len(p)) for p in preds],
