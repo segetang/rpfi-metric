@@ -73,13 +73,20 @@ rpfi/
 ├── configs/
 │   └── rpfi_anchors.json           # fixed BWMD/SRE anchor values (see derive_anchors.py)
 │
+├── results/                        # per-participant RPFI scores (see §5 "Per-sample results")
+│   ├── rpfi_participant_pure_geometric.csv
+│   ├── rpfi_participant_ubfc_geometric.csv
+│   └── rpfi_participant_cohface_geometric.csv
+│
 └── docs/
-    └── figures/                    # final paper figures only (galleries etc. kept out of git history)
+    ├── figures/                    # final paper figures only (galleries etc. kept out of git history)
+    └── supplementary/               # supplementary-only figures (PURE/COHFACE galleries, meta CSVs)
 ```
 
-Large/derived artifacts (`runs/`, `results_*/`, `.pth` weights, `.npy` predictions,
+Large/derived artifacts (`runs/`, `results_*_final/`, `.pth` weights, `.npy` predictions,
 `__pycache__/`) are **not** tracked in git — see [`.gitignore`](./.gitignore) and
-§4 below for how to obtain or regenerate them.
+§4 below for how to obtain or regenerate them. The exception is `results/`, which holds
+the final per-participant RPFI scores themselves (see §5) — small CSVs, always tracked.
 
 ---
 
@@ -178,6 +185,11 @@ python src/eval/rpfi_eval.py --dataset {ds} --runs runs/{ds}_cv5 \
 
 Repeat steps 4–6, 8 for `ds ∈ {pure, ubfc, cohface}`.
 
+Step 8 writes a full local output folder `results_{ds}_final/` (config, per-participant
+scores, posthoc tests, summary — gitignored, regenerable). The single file
+`rpfi_participant_{ds}_geometric.csv` from each of those runs is additionally copied into
+the tracked `results/` directory at the repo root — see §5.
+
 ### Robustness / diagnostic analyses (optional, `analysis/`)
 
 These reproduce the auxiliary validation studies referenced in the paper's Discussion /
@@ -189,7 +201,25 @@ avoid duplicating the metric implementation.
 
 ---
 
-## 5. Reproducibility notes
+## 5. Per-sample results
+
+`results/` contains the **final per-participant RPFI scores** for all three datasets,
+committed directly to this repository (not gitignored, not regenerated-on-demand):
+
+| File | Contents |
+|---|---|
+| `rpfi_participant_pure_geometric.csv` | Per-participant RPFI (geometric aggregation) + component breakdown (BWMD/SRE/WCR/EDD), PURE, all 8 models × 5-fold CV |
+| `rpfi_participant_ubfc_geometric.csv` | Same, UBFC-rPPG |
+| `rpfi_participant_cohface_geometric.csv` | Same, COHFACE |
+
+These are published alongside the code (rather than only the aggregate numbers reported in
+the paper's tables) so that every score in the paper can be traced back to an individual
+participant/model/fold record. This directly addresses the reviewers' request that
+per-sample results, not just code, be made available during the review period.
+
+---
+
+## 6. Reproducibility notes
 
 - **Subject-wise (participant-level) K=5 cross-validation** is used for all three datasets
   — not a time-based split. This is enforced by `src/splits/subject_split_v2.py`, which
@@ -208,7 +238,7 @@ avoid duplicating the metric implementation.
 
 ---
 
-## 6. License
+## 7. License
 
 Code: [MIT License](./LICENSE) (adjust if you prefer a different license).
 Datasets referenced above (PURE / UBFC-rPPG / COHFACE) retain their own original licenses —
@@ -216,7 +246,7 @@ this repository does not redistribute them.
 
 ---
 
-## 7. Citation
+## 8. Citation
 
 ```bibtex
 @article{wi2026rpfi,
