@@ -54,11 +54,11 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import butter, filtfilt, find_peaks
+from scipy.signal import butter, filtfilt
 from scipy.stats import spearmanr
-from scipy.signal import welch
+
 from rpfi_eval import (
-    COMPONENTS, DIRECTION, CARDIAC_BAND,
+    COMPONENTS, DIRECTION, SRE_G_MAX,
     compute_bwmd, compute_sre, compute_wcr, compute_edd,
     preprocess_chunk, preprocess_chunk_edd,
 )
@@ -193,91 +193,6 @@ def deg_hr_bias(y, fs, lv, rng):
     return np.interp(src, np.arange(n), y)
 
 
-# ══════════════════════════════════════════════════════════════════
-# 열화 신규 3종 (M8 대응) — 리뷰어가 명시한 목록 중 기존 13종에 없던 것들
-#   polarity inversion / dicrotic-notch attenuation / missed+extra beats
-#   (missed는 기존 dropout이 이미 담당, extra_beats가 그 반대 방향)
-# ══════════════════════════════════════════════════════════════════
-
-def deg_polarity_inversion(y, fs, lv, rng):
-    """극성반전. y*cos(pi*lv): lv=0→그대로, lv=0.5→완전 소거(0), lv=1→완전반전.
-    실제 열화(센서 배선/부호 컨벤션 오류)는 이산적이지만, 다른 13종과 동일하게
-    [0,1] 연속 스윕으로 단조성 검증이 가능하도록 매끄러운 형태로 설계."""
-    return y * np.cos(np.pi * lv)
-
-
-def _dominant_cardiac_freq(y, fs, band=CARDIAC_BAND):
-    nperseg = min(256, len(y))
-    if nperseg < 16:
-        return None
-    freqs, psd = welch(y, fs=fs, nperseg=nperseg)
-    m = (freqs >= band[0]) & (freqs <= band[1])
-    if not m.any() or psd[m].sum() <= 0:
-        return None
-    return float(freqs[m][np.argmax(psd[m])])
-
-
-def deg_dicrotic_notch_attenuation(y, fs, lv, rng):
-    """dicrotic notch(2차 고조파, 심박 기본주파수의 2배 근방) 대역만 노치필터로
-    선택 감쇠한다. peak_broadening(전체 저역통과)과 달리 기본 심박 성분은 그대로
-    두고 dicrotic notch가 만드는 고조파만 표적으로 삼는다는 게 차이점."""
-    if lv <= 0:
-        return y.copy()
-    f0 = _dominant_cardiac_freq(y, fs)
-    if f0 is None:
-        return y.copy()
-    f_notch = 2.0 * f0
-    nyq = 0.5 * fs
-    bw = 0.3  # 노치 반폭(Hz)
-    lo, hi = (f_notch - bw) / nyq, (f_notch + bw) / nyq
-    if lo <= 1e-6 or hi >= 0.99 or lo >= hi:
-        return y.copy()   # 2f0가 나이퀴스트 근처면 노치 생략
-    b, a = butter(2, [max(lo, 1e-6), min(hi, 0.99)], btype="bandstop")
-    attenuated = filtfilt(b, a, y)
-    return (1.0 - lv) * y + lv * attenuated
-
-
-def deg_extra_beats(y, fs, lv, rng):
-    """dropout(=missed beats)의 반대 방향. 인접한 두 진짜 비트 사이 중점에
-    주변 비트 파형을 복사해 덧붙여서 '가짜 추가 박동'을 삽입한다."""
-    if lv <= 0:
-        return y.copy()
-    z = y.copy()
-    peaks, _ = find_peaks(y, distance=max(1, int(0.4 * fs)))
-    if len(peaks) < 3:
-        return z
-    n_gaps = len(peaks) - 1
-    n_insert = min(max(1, int(round(lv * n_gaps))), n_gaps)
-    gap_idx = rng.choice(n_gaps, size=n_insert, replace=False)
-    half = max(2, int(0.3 * fs))
-    for g in gap_idx:
-        p1, p2 = int(peaks[g]), int(peaks[g + 1])
-        mid = (p1 + p2) // 2
-        s, e = max(0, p1 - half), min(len(y), p1 + half)
-        template = y[s:e] - np.median(y[s:e])
-        ts = mid - (p1 - s)
-        te = ts + len(template)
-        if ts < 0 or te > len(z):
-            continue
-        z[ts:te] += template
-    return z
-
-
-def deg_peak_sharpening(y, fs, lv, rng):
-    """peak_broadening의 반대 방향. unsharp masking(영상처리 표준기법)으로
-    저역통과 성분을 뺀 '디테일'(피크 근방 고주파)을 원신호에 다시 과장해서
-    더한다 — 열화가 한쪽 방향(뭉개짐)뿐 아니라 반대쪽(과장됨)으로도 지표가
-    똑같이 나쁘게 반응하는지 검증하기 위함(M8, broadened *or* sharpened)."""
-    if lv <= 0:
-        return y.copy()
-    nyq = 0.5 * fs
-    cutoff = min(1.5 / nyq, 0.99)
-    b, a = butter(4, cutoff, btype="low")
-    smooth = filtfilt(b, a, y)
-    detail = y - smooth
-    return y + 3.0 * lv * detail
-
-
 DEGRADATIONS = {
     "white_noise": deg_white_noise,
     "colored_noise": deg_colored_noise,
@@ -292,10 +207,6 @@ DEGRADATIONS = {
     "peak_broadening": deg_peak_broadening,
     "quantization": deg_quantization,
     "hr_bias": deg_hr_bias,
-    "polarity_inversion": deg_polarity_inversion,
-    "dicrotic_notch_attenuation": deg_dicrotic_notch_attenuation,
-    "extra_beats": deg_extra_beats,
-    "peak_sharpening": deg_peak_sharpening,
 }
 
 
@@ -348,7 +259,8 @@ def main():
     ap.add_argument("--no-bpf", action="store_true")
     ap.add_argument("--lambda-detrend", type=int, default=100)
     ap.add_argument("--derive-all", action="store_true",
-                    help="WCR/EDD도 이론경계 대신 ideal↔null로 경험적 도출 (비권장)")
+                    help="WCR/EDD/SRE도 이론경계 대신 ideal↔null로 경험적 도출 "
+                         "(비권장 — SRE는 과거 방식 재현/비교용으로만 사용할 것)")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
@@ -401,21 +313,30 @@ def main():
 
     # ── anchor 확정 ──
     # ★ 컴포넌트마다 anchor 근거가 다르다.
-    #   BWMD / SRE : 정의상 상한은 있으나(각 3.0, 6.0) 실제로 도달하지 않는 느슨한 값이라,
-    #                ideal↔null 앙상블로 "도달 가능한 최선 ↔ 무관한 신호" 구간을 잡는다.
+    #   BWMD       : 정의상 상한은 있으나(3.0) 실제로 도달하지 않는 느슨한 값이라
+    #                (실측 anchor 이용률 92~100%, 클리핑 거의 0), ideal↔null 앙상블로
+    #                "도달 가능한 최선 ↔ 무관한 신호" 구간을 잡는 편이 낫다.
+    #   SRE        : 2026-07 anchor 재검토 전에는 BWMD와 같은 이유로 ideal↔null을
+    #                썼으나(당시 anchor≈[0.0038, 1.4854]), 9개 run 실측에서 최대 35%
+    #                클리핑(관측 최댓값 4.29)이 나와 "느슨해서 안 닿는다"는 전제가
+    #                틀렸음이 확인됐다. RMSE는 z-norm 경로에서 [0,2]로 유계이고
+    #                g(SNR)은 rpfi_eval.SRE_G_MAX로 명시적으로 클램프되므로
+    #                SRE = RMSE·g(SNR) ≤ 2·SRE_G_MAX는 평가 대상 모델 풀과 무관하게
+    #                항상 성립하는 **닫힌 형태 이론상한**이다. 이후로는 SRE도 이론경계를
+    #                직접 쓴다(BWMD보다 오히려 더 강한 pool-independence 근거).
     #   WCR / EDD  : 정의상 이미 [0,1]로 유계이므로 **이론 경계**를 그대로 쓴다.
     #                이 둘에 ideal↔null을 적용하면 오히려 왜곡된다:
     #                  · WCR은 null에서 음수(-0.01)가 나와 하한이 음수로 잡힌다.
     #                  · EDD는 null(무관 맥파)의 잔차가 두 사인파의 차라서 오히려
     #                    가우시안에 가까워 값이 낮게 나온다. 즉 EDD는 ideal→null 축을
     #                    따라 단조롭지 않아 이 방식으로 anchor를 잡을 수 없다.
-    THEORETICAL = {"WCR": (0.0, 1.0), "EDD": (0.0, 1.0)}
+    THEORETICAL = {"WCR": (0.0, 1.0), "EDD": (0.0, 1.0), "SRE": (0.0, 2.0 * SRE_G_MAX)}
 
     anchors, anchor_basis = {}, {}
     for c in COMPONENTS:
         if c in THEORETICAL and not args.derive_all:
             anchors[c] = THEORETICAL[c]
-            anchor_basis[c] = "theoretical [0,1]"
+            anchor_basis[c] = f"theoretical [{THEORETICAL[c][0]:g}, {THEORETICAL[c][1]:g}]"
             continue
         iv = np.asarray(ideal_vals[c])
         nv = np.asarray(null_vals[c])
@@ -550,8 +471,13 @@ def main():
                 detrend=do_detrend, bandpass=do_bpf, lambda_detrend=args.lambda_detrend,
                 q_lo=args.q_lo, q_hi=args.q_hi, seed=args.seed,
                 derive_all=args.derive_all, anchor_basis=anchor_basis,
-                anchor_definition="BWMD/SRE: ideal(1% residual) vs null(unrelated PPG + "
-                                  "bandpassed noise). WCR/EDD: theoretical [0,1].")
+                anchor_definition="BWMD: ideal(1% residual) vs null(unrelated PPG + "
+                                  "bandpassed noise), p{q_lo}/p{q_hi} of that ensemble. "
+                                  "SRE: theoretical [0, 2*SRE_G_MAX] (RMSE bounded to [0,2] "
+                                  "on z-normalized signals; g(SNR) clamped to "
+                                  "[SRE_G_MIN, SRE_G_MAX] in rpfi_eval.py). "
+                                  "WCR/EDD: theoretical [0,1].".format(
+                                      q_lo=args.q_lo, q_hi=args.q_hi))
     json.dump(meta, open(out / "anchor_meta.json", "w"), indent=2)
     (out / "degradation_report.txt").write_text(report, encoding="utf-8")
 
