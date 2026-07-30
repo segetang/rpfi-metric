@@ -54,11 +54,11 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import butter, filtfilt
-from scipy.stats import spearmanr
+from scipy.signal import butter, filtfilt, find_peaks, welch
+from scipy.stats import spearmanr, mannwhitneyu, ttest_ind
 
 from rpfi_eval import (
-    COMPONENTS, DIRECTION, SRE_G_MAX,
+    COMPONENTS, DIRECTION, SRE_G_MAX, CARDIAC_BAND,
     compute_bwmd, compute_sre, compute_wcr, compute_edd,
     preprocess_chunk, preprocess_chunk_edd,
 )
@@ -193,6 +193,77 @@ def deg_hr_bias(y, fs, lv, rng):
     return np.interp(src, np.arange(n), y)
 
 
+def deg_polarity_inversion(y, fs, lv, rng):
+    """극성반전. y*cos(pi*lv): lv=0→그대로, lv=0.5→완전 소거(0), lv=1→완전반전."""
+    return y * np.cos(np.pi * lv)
+
+
+def _dominant_cardiac_freq(y, fs, band=CARDIAC_BAND):
+    nperseg = min(256, len(y))
+    if nperseg < 16:
+        return None
+    freqs, psd = welch(y, fs=fs, nperseg=nperseg)
+    m = (freqs >= band[0]) & (freqs <= band[1])
+    if not m.any() or psd[m].sum() <= 0:
+        return None
+    return float(freqs[m][np.argmax(psd[m])])
+
+
+def deg_dicrotic_notch_attenuation(y, fs, lv, rng):
+    """dicrotic notch(2차 고조파) 대역만 노치필터로 선택 감쇠."""
+    if lv <= 0:
+        return y.copy()
+    f0 = _dominant_cardiac_freq(y, fs)
+    if f0 is None:
+        return y.copy()
+    f_notch = 2.0 * f0
+    nyq = 0.5 * fs
+    bw = 0.3
+    lo, hi = (f_notch - bw) / nyq, (f_notch + bw) / nyq
+    if lo <= 1e-6 or hi >= 0.99 or lo >= hi:
+        return y.copy()
+    b, a = butter(2, [max(lo, 1e-6), min(hi, 0.99)], btype="bandstop")
+    attenuated = filtfilt(b, a, y)
+    return (1.0 - lv) * y + lv * attenuated
+
+
+def deg_extra_beats(y, fs, lv, rng):
+    """dropout(=missed beats)의 반대 방향. 가짜 추가 박동을 삽입."""
+    if lv <= 0:
+        return y.copy()
+    z = y.copy()
+    peaks, _ = find_peaks(y, distance=max(1, int(0.4 * fs)))
+    if len(peaks) < 3:
+        return z
+    n_gaps = len(peaks) - 1
+    n_insert = min(max(1, int(round(lv * n_gaps))), n_gaps)
+    gap_idx = rng.choice(n_gaps, size=n_insert, replace=False)
+    half = max(2, int(0.3 * fs))
+    for g in gap_idx:
+        p1, p2 = int(peaks[g]), int(peaks[g + 1])
+        mid = (p1 + p2) // 2
+        s, e = max(0, p1 - half), min(len(y), p1 + half)
+        template = y[s:e] - np.median(y[s:e])
+        ts = mid - (p1 - s)
+        te = ts + len(template)
+        if ts < 0 or te > len(z):
+            continue
+        z[ts:te] += template
+    return z
+
+
+def deg_peak_sharpening(y, fs, lv, rng):
+    """peak_broadening의 반대 방향. unsharp masking으로 디테일을 과장."""
+    if lv <= 0:
+        return y.copy()
+    nyq = 0.5 * fs
+    cutoff = min(1.5 / nyq, 0.99)
+    b, a = butter(4, cutoff, btype="low")
+    smooth = filtfilt(b, a, y)
+    detail = y - smooth
+    return y + 3.0 * lv * detail
+
+
 DEGRADATIONS = {
     "white_noise": deg_white_noise,
     "colored_noise": deg_colored_noise,
@@ -207,6 +278,10 @@ DEGRADATIONS = {
     "peak_broadening": deg_peak_broadening,
     "quantization": deg_quantization,
     "hr_bias": deg_hr_bias,
+    "polarity_inversion": deg_polarity_inversion,
+    "dicrotic_notch_attenuation": deg_dicrotic_notch_attenuation,
+    "extra_beats": deg_extra_beats,
+    "peak_sharpening": deg_peak_sharpening,
 }
 
 
@@ -453,6 +528,37 @@ def main():
         lines.append("  ⚠ 역방향 반응(열화가 심해질수록 지표가 좋아짐) — 반드시 확인:")
         for d, c, r in non_monotonic:
             lines.append(f"      {d:<20s} {c:<6s} ρ={r:+.3f}")
+
+    # ── burst vs dispersed 구분력 통계검정 (R1-8/M10, "동일 크기 잔차라도
+    #    burst냐 dispersed냐를 EDD가 구분하는가") — 최대 강도(lv=1.0 → 정확히
+    #    5% spike fraction, deg_spike_burst/dispersed의 k=0.05*lv*len(y) 정의상)
+    #    에서 spike_burst와 spike_dispersed의 EDD 분포를 rep×fs 전체 풀링해 비교.
+    lines.append("")
+    lines.append("=" * 96)
+    lines.append("burst vs dispersed 구분력 통계검정 (최대강도=5% spike fraction, EDD 기준)")
+    lines.append("=" * 96)
+    max_level = 1.0  # lv=li/(levels-1)의 최댓값 — deg_spike_*의 k=0.05*lv*len(y) 정의상 정확히 5%
+    burst_edd = np.array([r["EDD"] for r in sweep_rows
+                          if r["degradation"] == "spike_burst"
+                          and abs(r["level"] - max_level) < 1e-9])
+    disp_edd = np.array([r["EDD"] for r in sweep_rows
+                         if r["degradation"] == "spike_dispersed"
+                         and abs(r["level"] - max_level) < 1e-9])
+    lines.append(f"  n(burst)={len(burst_edd)}  n(dispersed)={len(disp_edd)}  "
+                f"(reps={args.reps} × fs{len(fs_list)}종 = {args.reps*len(fs_list)}이어야 정상)")
+    if len(burst_edd) >= 2 and len(disp_edd) >= 2:
+        lines.append(f"  burst      EDD: mean={burst_edd.mean():.4f}  std={burst_edd.std():.4f}  "
+                    f"median={np.median(burst_edd):.4f}")
+        lines.append(f"  dispersed  EDD: mean={disp_edd.mean():.4f}  std={disp_edd.std():.4f}  "
+                    f"median={np.median(disp_edd):.4f}")
+        t_stat, p_ttest = ttest_ind(burst_edd, disp_edd, equal_var=False)
+        u_stat, p_mwu = mannwhitneyu(burst_edd, disp_edd, alternative="two-sided")
+        lines.append(f"  Welch t-test:      t={t_stat:.4f}  p={p_ttest:.6g}")
+        lines.append(f"  Mann-Whitney U:    U={u_stat:.4f}  p={p_mwu:.6g}")
+        lines.append(f"  → {'통계적으로 유의하게 구분됨' if p_mwu < 0.05 else '유의한 차이 없음(⚠ 재검토 필요)'} "
+                    f"(Mann-Whitney 기준, α=0.05)")
+    else:
+        lines.append("  ⚠ 표본 부족 — --reps를 늘려서 재실행 필요")
 
     report = "\n".join(lines)
     print("\n" + report)
