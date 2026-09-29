@@ -1,0 +1,46 @@
+{
+  "dataset": "pure",
+  "fs": 30,
+  "seg_len": 300,
+  "eval_seconds": 10.0,
+  "detrend": true,
+  "lambda_detrend": 100,
+  "bandpass": true,
+  "cardiac_band": [
+    0.75,
+    3.0
+  ],
+  "aggregation": "geometric",
+  "weights": {
+    "BWMD": 0.375,
+    "WCR": 0.375,
+    "EDD": 0.25
+  },
+  "anchors": {
+    "BWMD": [
+      0.0006209498075351768,
+      0.902266222602872
+    ],
+    "WCR": [
+      0.0,
+      1.0
+    ],
+    "EDD": [
+      0.0,
+      1.0
+    ]
+  },
+  "models": [
+    "bilstm",
+    "bimamba",
+    "bimamba_blend",
+    "lstm",
+    "mamba",
+    "physdiff",
+    "rnn",
+    "transformer"
+  ],
+  "n_boot": 2000,
+  "seed": 42,
+  "dtw_backend": "naive"
+}

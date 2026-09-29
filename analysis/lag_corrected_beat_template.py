@@ -249,7 +249,7 @@ def find_col(df, keywords):
 
 
 def cross_validate_with_rpfi(df, results_root, dataset, agg, out_dir):
-    d = Path(results_root) / f"results_{dataset}_final"
+    d = Path(results_root) / f"results_eval_noSRE"
     cands = sorted(d.glob(f"rpfi_participant_{dataset}_{agg}*.csv"))
     if not cands:
         print(f"[교차검증 건너뜀] {d}에 rpfi_participant_*.csv 없음")

@@ -6,7 +6,15 @@ derive_anchors.py — RPFI 고정 anchor 재도출 + 알려진 열화에 대한 
 기존 anchor SRE[0.065, 6.493]는 g(SNR)의 saturation 항 부호가 뒤집혀 있던
 상태(자체발견 X-4)에서 만든 열화 벤치마크 분포에서 나온 값이다.
 rpfi_eval.py에서 부호를 고치면서 SRE의 척도 자체가 바뀌었으므로
-(g(30dB): 1.50 → 0.50, g(40dB): 1.83 → 0.20) 옛 anchor는 무효다.
+(g(30dB): 1.50 → 0.50, g(40dB): 1.83 → 0.20) 옛 anchor는 무효였다.
+
+[SRE 제거, 2026-09-28] SRE는 이후 완전히 제거되었다(rpfi_eval.py [12] 참조) —
+z-norm 평가경로에서 CCC가 Pearson r로, RMSE가 √(2(1−r))로 축약되어 SRE와 WCR이
+사실상 같은 정보를 측정한다는 점이 Discussion(Sec. VI)에서 확인되었기 때문이다.
+이 스크립트도 SRE 관련 import(compute_sre, SRE_G_MAX)와 THEORETICAL의 SRE 항목,
+anchor_definition 문자열의 SRE 서술을 함께 제거했다. BWMD/WCR/EDD의 anchor 도출
+로직은 컴포넌트별로 완전히 독립적이므로(아래 components_for_case 참조) 값 자체는
+변경할 필요가 없었다.
 
 ★ 이 스크립트는 rpfi_eval.py의 컴포넌트 함수를 **직접 import**한다.
   anchor를 만드는 코드와 쓰는 코드가 같은 함수를 공유하므로 척도 불일치가
@@ -54,12 +62,12 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import butter, filtfilt, find_peaks, welch
-from scipy.stats import spearmanr, mannwhitneyu, ttest_ind
+from scipy.signal import butter, filtfilt
+from scipy.stats import spearmanr
 
 from rpfi_eval import (
-    COMPONENTS, DIRECTION, SRE_G_MAX, CARDIAC_BAND,
-    compute_bwmd, compute_sre, compute_wcr, compute_edd,
+    COMPONENTS, DIRECTION,
+    compute_bwmd, compute_wcr, compute_edd,
     preprocess_chunk, preprocess_chunk_edd,
 )
 
@@ -193,77 +201,6 @@ def deg_hr_bias(y, fs, lv, rng):
     return np.interp(src, np.arange(n), y)
 
 
-def deg_polarity_inversion(y, fs, lv, rng):
-    """극성반전. y*cos(pi*lv): lv=0→그대로, lv=0.5→완전 소거(0), lv=1→완전반전."""
-    return y * np.cos(np.pi * lv)
-
-
-def _dominant_cardiac_freq(y, fs, band=CARDIAC_BAND):
-    nperseg = min(256, len(y))
-    if nperseg < 16:
-        return None
-    freqs, psd = welch(y, fs=fs, nperseg=nperseg)
-    m = (freqs >= band[0]) & (freqs <= band[1])
-    if not m.any() or psd[m].sum() <= 0:
-        return None
-    return float(freqs[m][np.argmax(psd[m])])
-
-
-def deg_dicrotic_notch_attenuation(y, fs, lv, rng):
-    """dicrotic notch(2차 고조파) 대역만 노치필터로 선택 감쇠."""
-    if lv <= 0:
-        return y.copy()
-    f0 = _dominant_cardiac_freq(y, fs)
-    if f0 is None:
-        return y.copy()
-    f_notch = 2.0 * f0
-    nyq = 0.5 * fs
-    bw = 0.3
-    lo, hi = (f_notch - bw) / nyq, (f_notch + bw) / nyq
-    if lo <= 1e-6 or hi >= 0.99 or lo >= hi:
-        return y.copy()
-    b, a = butter(2, [max(lo, 1e-6), min(hi, 0.99)], btype="bandstop")
-    attenuated = filtfilt(b, a, y)
-    return (1.0 - lv) * y + lv * attenuated
-
-
-def deg_extra_beats(y, fs, lv, rng):
-    """dropout(=missed beats)의 반대 방향. 가짜 추가 박동을 삽입."""
-    if lv <= 0:
-        return y.copy()
-    z = y.copy()
-    peaks, _ = find_peaks(y, distance=max(1, int(0.4 * fs)))
-    if len(peaks) < 3:
-        return z
-    n_gaps = len(peaks) - 1
-    n_insert = min(max(1, int(round(lv * n_gaps))), n_gaps)
-    gap_idx = rng.choice(n_gaps, size=n_insert, replace=False)
-    half = max(2, int(0.3 * fs))
-    for g in gap_idx:
-        p1, p2 = int(peaks[g]), int(peaks[g + 1])
-        mid = (p1 + p2) // 2
-        s, e = max(0, p1 - half), min(len(y), p1 + half)
-        template = y[s:e] - np.median(y[s:e])
-        ts = mid - (p1 - s)
-        te = ts + len(template)
-        if ts < 0 or te > len(z):
-            continue
-        z[ts:te] += template
-    return z
-
-
-def deg_peak_sharpening(y, fs, lv, rng):
-    """peak_broadening의 반대 방향. unsharp masking으로 디테일을 과장."""
-    if lv <= 0:
-        return y.copy()
-    nyq = 0.5 * fs
-    cutoff = min(1.5 / nyq, 0.99)
-    b, a = butter(4, cutoff, btype="low")
-    smooth = filtfilt(b, a, y)
-    detail = y - smooth
-    return y + 3.0 * lv * detail
-
-
 DEGRADATIONS = {
     "white_noise": deg_white_noise,
     "colored_noise": deg_colored_noise,
@@ -278,10 +215,6 @@ DEGRADATIONS = {
     "peak_broadening": deg_peak_broadening,
     "quantization": deg_quantization,
     "hr_bias": deg_hr_bias,
-    "polarity_inversion": deg_polarity_inversion,
-    "dicrotic_notch_attenuation": deg_dicrotic_notch_attenuation,
-    "extra_beats": deg_extra_beats,
-    "peak_sharpening": deg_peak_sharpening,
 }
 
 
@@ -291,7 +224,7 @@ DEGRADATIONS = {
 
 def components_for_case(ref_chunks, pred_chunks, fs, do_detrend, do_bpf, Lambda):
     """rpfi_eval.main()의 participant 처리와 완전히 동일한 절차.
-    BWMD/SRE/WCR는 BPF 신호(L,P), EDD는 non-BPF 신호(L_e,P_e)를 쓴다
+    BWMD/WCR는 BPF 신호(L,P), EDD는 non-BPF 신호(L_e,P_e)를 쓴다
     (rpfi_eval.py의 preprocess_chunk_edd 설계와 동일한 이유)."""
     L = np.array([preprocess_chunk(c, fs, do_detrend, do_bpf, Lambda) for c in ref_chunks])
     P = np.array([preprocess_chunk(c, fs, do_detrend, do_bpf, Lambda) for c in pred_chunks])
@@ -299,10 +232,9 @@ def components_for_case(ref_chunks, pred_chunks, fs, do_detrend, do_bpf, Lambda)
     P_e = np.array([preprocess_chunk_edd(c, fs, do_detrend, Lambda) for c in pred_chunks])
     bwmd = float(np.mean([compute_bwmd(L[i], P[i], fs)[0] for i in range(len(L))]))
     y, p = L.ravel(), P.ravel()
-    sre = compute_sre(y, p, fs)[0]
     wcr = compute_wcr(y, p)[0]
     edd = compute_edd(L_e.ravel(), P_e.ravel(), fs)
-    return {"BWMD": bwmd, "SRE": sre, "WCR": wcr, "EDD": edd}
+    return {"BWMD": bwmd, "WCR": wcr, "EDD": edd}
 
 
 def make_case(fs, seg_len, n_chunks, rng, transform):
@@ -334,8 +266,8 @@ def main():
     ap.add_argument("--no-bpf", action="store_true")
     ap.add_argument("--lambda-detrend", type=int, default=100)
     ap.add_argument("--derive-all", action="store_true",
-                    help="WCR/EDD/SRE도 이론경계 대신 ideal↔null로 경험적 도출 "
-                         "(비권장 — SRE는 과거 방식 재현/비교용으로만 사용할 것)")
+                    help="WCR/EDD도 이론경계 대신 ideal↔null로 경험적 도출 (비권장 — "
+                         "§anchor 확정 아래 주석대로 두 컴포넌트는 이 방식으로 왜곡됨)")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
@@ -391,21 +323,17 @@ def main():
     #   BWMD       : 정의상 상한은 있으나(3.0) 실제로 도달하지 않는 느슨한 값이라
     #                (실측 anchor 이용률 92~100%, 클리핑 거의 0), ideal↔null 앙상블로
     #                "도달 가능한 최선 ↔ 무관한 신호" 구간을 잡는 편이 낫다.
-    #   SRE        : 2026-07 anchor 재검토 전에는 BWMD와 같은 이유로 ideal↔null을
-    #                썼으나(당시 anchor≈[0.0038, 1.4854]), 9개 run 실측에서 최대 35%
-    #                클리핑(관측 최댓값 4.29)이 나와 "느슨해서 안 닿는다"는 전제가
-    #                틀렸음이 확인됐다. RMSE는 z-norm 경로에서 [0,2]로 유계이고
-    #                g(SNR)은 rpfi_eval.SRE_G_MAX로 명시적으로 클램프되므로
-    #                SRE = RMSE·g(SNR) ≤ 2·SRE_G_MAX는 평가 대상 모델 풀과 무관하게
-    #                항상 성립하는 **닫힌 형태 이론상한**이다. 이후로는 SRE도 이론경계를
-    #                직접 쓴다(BWMD보다 오히려 더 강한 pool-independence 근거).
     #   WCR / EDD  : 정의상 이미 [0,1]로 유계이므로 **이론 경계**를 그대로 쓴다.
     #                이 둘에 ideal↔null을 적용하면 오히려 왜곡된다:
     #                  · WCR은 null에서 음수(-0.01)가 나와 하한이 음수로 잡힌다.
     #                  · EDD는 null(무관 맥파)의 잔차가 두 사인파의 차라서 오히려
     #                    가우시안에 가까워 값이 낮게 나온다. 즉 EDD는 ideal→null 축을
     #                    따라 단조롭지 않아 이 방식으로 anchor를 잡을 수 없다.
-    THEORETICAL = {"WCR": (0.0, 1.0), "EDD": (0.0, 1.0), "SRE": (0.0, 2.0 * SRE_G_MAX)}
+    #   [SRE 제거, 2026-09-28] SRE는 rpfi_eval.py에서 완전히 제거되어 이 스크립트에서도
+    #                삭제했다 — 위 세 컴포넌트의 anchor 도출 로직은 서로 완전히 독립적이므로
+    #                (각자 별도 함수 호출, 별도 ideal_vals/null_vals 저장) 이 제거가
+    #                BWMD/WCR/EDD의 anchor 값에는 영향을 주지 않는다.
+    THEORETICAL = {"WCR": (0.0, 1.0), "EDD": (0.0, 1.0)}
 
     anchors, anchor_basis = {}, {}
     for c in COMPONENTS:
@@ -529,37 +457,6 @@ def main():
         for d, c, r in non_monotonic:
             lines.append(f"      {d:<20s} {c:<6s} ρ={r:+.3f}")
 
-    # ── burst vs dispersed 구분력 통계검정 (R1-8/M10, "동일 크기 잔차라도
-    #    burst냐 dispersed냐를 EDD가 구분하는가") — 최대 강도(lv=1.0 → 정확히
-    #    5% spike fraction, deg_spike_burst/dispersed의 k=0.05*lv*len(y) 정의상)
-    #    에서 spike_burst와 spike_dispersed의 EDD 분포를 rep×fs 전체 풀링해 비교.
-    lines.append("")
-    lines.append("=" * 96)
-    lines.append("burst vs dispersed 구분력 통계검정 (최대강도=5% spike fraction, EDD 기준)")
-    lines.append("=" * 96)
-    max_level = 1.0  # lv=li/(levels-1)의 최댓값 — deg_spike_*의 k=0.05*lv*len(y) 정의상 정확히 5%
-    burst_edd = np.array([r["EDD"] for r in sweep_rows
-                          if r["degradation"] == "spike_burst"
-                          and abs(r["level"] - max_level) < 1e-9])
-    disp_edd = np.array([r["EDD"] for r in sweep_rows
-                         if r["degradation"] == "spike_dispersed"
-                         and abs(r["level"] - max_level) < 1e-9])
-    lines.append(f"  n(burst)={len(burst_edd)}  n(dispersed)={len(disp_edd)}  "
-                f"(reps={args.reps} × fs{len(fs_list)}종 = {args.reps*len(fs_list)}이어야 정상)")
-    if len(burst_edd) >= 2 and len(disp_edd) >= 2:
-        lines.append(f"  burst      EDD: mean={burst_edd.mean():.4f}  std={burst_edd.std():.4f}  "
-                    f"median={np.median(burst_edd):.4f}")
-        lines.append(f"  dispersed  EDD: mean={disp_edd.mean():.4f}  std={disp_edd.std():.4f}  "
-                    f"median={np.median(disp_edd):.4f}")
-        t_stat, p_ttest = ttest_ind(burst_edd, disp_edd, equal_var=False)
-        u_stat, p_mwu = mannwhitneyu(burst_edd, disp_edd, alternative="two-sided")
-        lines.append(f"  Welch t-test:      t={t_stat:.4f}  p={p_ttest:.6g}")
-        lines.append(f"  Mann-Whitney U:    U={u_stat:.4f}  p={p_mwu:.6g}")
-        lines.append(f"  → {'통계적으로 유의하게 구분됨' if p_mwu < 0.05 else '유의한 차이 없음(⚠ 재검토 필요)'} "
-                    f"(Mann-Whitney 기준, α=0.05)")
-    else:
-        lines.append("  ⚠ 표본 부족 — --reps를 늘려서 재실행 필요")
-
     report = "\n".join(lines)
     print("\n" + report)
 
@@ -579,10 +476,8 @@ def main():
                 derive_all=args.derive_all, anchor_basis=anchor_basis,
                 anchor_definition="BWMD: ideal(1% residual) vs null(unrelated PPG + "
                                   "bandpassed noise), p{q_lo}/p{q_hi} of that ensemble. "
-                                  "SRE: theoretical [0, 2*SRE_G_MAX] (RMSE bounded to [0,2] "
-                                  "on z-normalized signals; g(SNR) clamped to "
-                                  "[SRE_G_MIN, SRE_G_MAX] in rpfi_eval.py). "
-                                  "WCR/EDD: theoretical [0,1].".format(
+                                  "WCR/EDD: theoretical [0,1]. (SRE removed 2026-09-28; "
+                                  "see rpfi_eval.py changelog [12].)".format(
                                       q_lo=args.q_lo, q_hi=args.q_hi))
     json.dump(meta, open(out / "anchor_meta.json", "w"), indent=2)
     (out / "degradation_report.txt").write_text(report, encoding="utf-8")

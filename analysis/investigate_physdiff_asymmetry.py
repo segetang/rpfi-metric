@@ -91,13 +91,17 @@ def glob_one(root, pattern, what):
 # ══════════════════════════════════════════════════════════════
 
 def load_cross_rpfi_csv(results_root, source, target, agg):
-    d = Path(results_root) / f"results_cross_{source}_to_{target}"
+    d = Path(results_root) / f"{source}_to_{target}"
     pat = f"rpfi_participant_{target}_{agg}*.csv"
+
     try:
         f = glob_one(d, pat, f"RPFI CSV ({source}->{target})")
     except FileNotFoundError:
-        f = glob_one(d, "rpfi_participant_*.csv", f"RPFI CSV ({source}->{target})")
+        f = glob_one(d, "rpfi_participant_*.csv",
+                     f"RPFI CSV ({source}->{target})")
+
     return pd.read_csv(f), f
+
 
 
 def part_a_volatility(df_a, df_b, model_col, rpfi_col, label_a, label_b):

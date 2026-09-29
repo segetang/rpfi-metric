@@ -1,9 +1,9 @@
 """
 rpfi_eval.py — RPFI (rPPG Physiological Fidelity Index) 평가 파이프라인 (재작성판)
 ====================================================================================
-main_eval_final.py를 대체한다. RPFI의 핵심 아이디어(BWMD 형태학 / SRE SNR가중오차 /
-WCR 일치도 / EDD 오차분포 4개 컴포넌트를 합쳐 0-100 충실도 점수를 낸다)는 그대로
-유지하되, 리뷰어 지적과 자체 코드감사에서 나온 결함을 전부 반영했다.
+main_eval_final.py를 대체한다. RPFI의 핵심 아이디어(BWMD 형태학 / WCR 일치도 /
+EDD 오차분포 3개 컴포넌트를 합쳐 0-100 충실도 점수를 낸다 — SRE는 [12]에서 제거)는
+그대로 유지하되, 리뷰어 지적과 자체 코드감사에서 나온 결함을 전부 반영했다.
 
 기존 main_eval_final.py 대비 변경점 (→ 대응 리뷰어 항목)
 ---------------------------------------------------------
@@ -48,6 +48,20 @@ WCR 일치도 / EDD 오차분포 4개 컴포넌트를 합쳐 0-100 충실도 점
     (기존 코드는 본문 "ms"/표 "seconds" 불일치 상태였다)
 [10] 가중치 민감도 + 컴포넌트 중복성 분석                            → R1-11, R2
 [11] 계산비용 벤치마크 유지                                          → R2-6
+[12] SRE(SNR-Adjusted Robust Error) 컴포넌트 완전 제거                → 저자 자체결정(2026-09-28)
+    SRE와 WCR이 사실상 같은 정보를 측정한다는 점이 Discussion(Sec. VI)에서 이미
+    드러났다: z-norm 평가경로에서는 CCC가 정확히 Pearson r로 축약되고 RMSE는
+    √(2(1−r))로 축약되므로, 두 컴포넌트가 거의 완전히 반비례 관계였다. 이에 따라
+    4→3 컴포넌트로 단순화하기로 결정했다.
+    COMPONENTS/DIRECTION/DEFAULT_ANCHORS에서 SRE 항목을 삭제하고, SRE 전용 함수
+    (spectral_snr, sigmoid, snr_weight_g, compute_sre)와 관련 상수(SRE_SNR_LOW/HIGH,
+    SRE_W_LOW/HIGH, SRE_G_MIN/MAX)를 모두 제거했다. DEFAULT_WEIGHTS는 기존 비율
+    (BWMD:WCR:EDD = 0.3:0.3:0.2)을 유지한 채 SRE의 가중치 0.2를 비례 재분배했다:
+    BWMD=0.375, WCR=0.375, EDD=0.25.
+    RMSE는 SRE와 무관한 표준 오차 지표이므로, 컴포지트에는 들어가지 않는
+    참고용(diagnostic-only) 값으로 유지한다(PSNR과 동일한 취급). anchor 재도출은
+    불필요하다 — BWMD/WCR/EDD의 anchor는 derive_anchors.py에서 컴포넌트별로
+    완전히 독립적으로 계산되므로(교차 의존성 없음), SRE 항목만 삭제하면 된다.
 
 입력 형식 (train_models.py / train_bimamba_blend.py 산출물)
 -------------------------------------------------------------
@@ -97,38 +111,28 @@ _trapz = getattr(np, "trapezoid", None) or np.trapz
 FS_BY_DATASET = {"pure": 30, "ubfc": 30, "cohface": 20}
 
 CARDIAC_BAND = (0.75, 3.0)          # Hz — 45~180 bpm
-COMPONENTS = ["BWMD", "SRE", "WCR", "EDD"]
+COMPONENTS = ["BWMD", "WCR", "EDD"]
 
 # 컴포넌트 방향: lower = 값이 작을수록 좋음
-DIRECTION = {"BWMD": "lower", "SRE": "lower", "WCR": "higher", "EDD": "lower"}
+DIRECTION = {"BWMD": "lower", "WCR": "higher", "EDD": "lower"}
 
 # [2] 고정 anchor (풀 비의존).
 #   WCR/EDD: 정의상 유계 — WCR은 [-1,1]이나 음의 상관은 전부 "최악"으로 보아 하한 0.
 #            EDD는 정규화 JSD라 [0,1].
-#   BWMD/SRE: z-norm 평가경로에서 이론 상한이 존재하나(각각 3.0, ~6.0) 실제 도달하지
-#            않으므로, 합성 열화 벤치마크(rpfi_degradation.py) 분포의 p1-p99를 anchor로 쓴다.
+#   BWMD: z-norm 평가경로에서 이론 상한이 존재하나(3.0) 실제 도달하지 않으므로,
+#         합성 열화 벤치마크(rpfi_degradation.py) 분포의 p1-p99를 anchor로 쓴다.
 #   ※ --anchors 로 JSON을 넘겨 덮어쓸 수 있고, 실행 시 실측 범위가 anchor를 벗어나면 경고한다.
+#   [12] SRE 제거에 따라 SRE anchor 항목도 삭제했다 — 각 컴포넌트 anchor는
+#        derive_anchors.py에서 서로 독립적으로 계산되므로 BWMD/WCR/EDD 값은 불변.
 DEFAULT_ANCHORS = {
     "BWMD": (0.009, 0.859),
-    "SRE":  (0.065, 6.493),
     "WCR":  (0.0, 1.0),
     "EDD":  (0.0, 1.0),
 }
 
-DEFAULT_WEIGHTS = {"BWMD": 0.3, "SRE": 0.2, "WCR": 0.3, "EDD": 0.2}
-
-# [1] SRE g(SNR) 파라미터
-SRE_SNR_LOW = 3.0        # dB, 이 아래는 "어려운 캡처 조건"
-SRE_SNR_HIGH = 15.0      # dB, 이 위는 "쉬운 캡처 조건"
-SRE_W_LOW = 2.0          # 저SNR 가중 증폭 계수
-SRE_W_HIGH = 0.5         # 고SNR 가중 감쇠 계수
-# 유계성은 비율이 아니라 g 자체를 클램프해서 확보한다.
-#   G_MIN: 아무리 쉬운 조건이라도 오차를 완전히 무시하지는 않는다는 하한
-#   G_MAX: 극저SNR에서 페널티가 발산하지 않게 하는 상한
-# 이 두 클램프로 SRE = RMSE·g 가 유계가 되어 고정 anchor가 성립한다.
-# 결과: g(30dB)=0.50, g(40dB)=0.20(하한 도달), g(SNR→-∞)=3.00
-SRE_G_MIN = 0.20
-SRE_G_MAX = 3.00
+# [12] SRE 제거에 따라 그 가중치 0.2를 기존 비율(BWMD:WCR:EDD = 0.3:0.3:0.2)대로
+# 비례 재분배: BWMD 0.3→0.375, WCR 0.3→0.375, EDD 0.2→0.25 (합 = 1.0).
+DEFAULT_WEIGHTS = {"BWMD": 0.375, "WCR": 0.375, "EDD": 0.25}
 
 BWMD_LAMBDA_P = 1.0      # peak timing 항 가중
 BWMD_LAMBDA_A = 0.5      # amplitude overlap 항 가중
@@ -171,7 +175,7 @@ def znorm(x):
 
 
 def preprocess_chunk(x, fs, do_detrend=True, do_bpf=True, Lambda=100):
-    """chunk 단위 전처리. BWMD/SRE/WCR가 쓰는 표준 경로. label/pred 모두 동일 적용."""
+    """chunk 단위 전처리. BWMD/WCR가 쓰는 표준 경로. label/pred 모두 동일 적용."""
     y = np.asarray(x, dtype=float).copy()
     if do_detrend and len(y) >= 3:
         y = detrend_tarvainen(y, Lambda)
@@ -184,7 +188,7 @@ def preprocess_chunk_edd(x, fs, do_detrend=True, Lambda=100):
     """
     EDD 전용 전처리 — detrend + z-norm까지만, **BPF는 절대 적용하지 않는다**.
 
-    이유: BWMD/SRE/WCR용 신호는 label/pred 모두 0.75-3.0Hz로 강제 필터링돼있어,
+    이유: BWMD/WCR용 신호는 label/pred 모두 0.75-3.0Hz로 강제 필터링돼있어,
     그 신호로 잔차의 '심장대역 파워 비율'을 재면 분모(전체 파워)도 이미 그
     대역 안에 갇혀있으므로 비율이 항상 ~1.0으로 나와 아무것도 구분하지 못한다.
     EDD가 의미를 가지려면 잔차에 대역 밖 성분이 실제로 남아있어야 하므로,
@@ -220,7 +224,7 @@ def discover_models(runs_dir):
 def load_participant_data(runs_dir, label_full, model, fs, seg_len,
                           do_detrend, do_bpf, Lambda):
     """
-    반환: {participant_id: {"label": (n_chunk, seg_len),        # BWMD/SRE/WCR용(BPF)
+    반환: {participant_id: {"label": (n_chunk, seg_len),        # BWMD/WCR용(BPF)
                             "pred": (n_chunk, seg_len),
                             "label_edd": (n_chunk, seg_len),     # EDD 전용(non-BPF)
                             "pred_edd": (n_chunk, seg_len),
@@ -363,64 +367,21 @@ def compute_bwmd(y, yhat, fs):
 
 
 # ══════════════════════════════════════════════════════════════════
-# 컴포넌트 2: SRE — SNR 가중 오차 (부호 수정판, X-4)
+# [12] SRE(SNR-Adjusted Robust Error) 컴포넌트는 제거되었다.
+# 이 자리에 있던 spectral_snr/sigmoid/snr_weight_g/compute_sre 및
+# SRE_SNR_LOW/HIGH, SRE_W_LOW/HIGH, SRE_G_MIN/MAX 상수는 모두 삭제했다.
+# RMSE 자체는 SRE와 무관한 표준 오차 지표이므로, 컴포지트에는 들어가지 않는
+# 참고용(diagnostic-only) 값으로 아래 compute_rmse()를 통해 계속 보고한다.
 # ══════════════════════════════════════════════════════════════════
 
-def spectral_snr(y, fs, band=CARDIAC_BAND):
-    """참조신호의 대역내/대역외 파워비(dB). prediction과 무관 = 캡처 난이도 지표."""
-    nperseg = min(256, len(y))
-    if nperseg < 16:
-        return 0.0
-    freqs, psd = welch(y, fs=fs, nperseg=nperseg)
-    m = (freqs >= band[0]) & (freqs <= band[1])
-    sig_p = _trapz(psd[m], freqs[m])
-    noi_p = _trapz(psd[~m], freqs[~m])
-    if noi_p < 1e-12:
-        return 100.0
-    if sig_p < 1e-12:
-        return -100.0
-    return float(10.0 * np.log10(sig_p / noi_p))
-
-
-def sigmoid(x):
-    return 1.0 / (1.0 + np.exp(-np.clip(x, -60, 60)))
-
-
-def snr_weight_g(snr_db):
-    """
-    [X-4 수정] 고SNR 항이 뺄셈이다.
-
-      g = 1 + w_low·σ(SNR_low − s)·r_low − w_high·σ(s − SNR_high)·r_high
-      r_low  = max(0, (SNR_low − s)/SNR_low)
-      r_high = max(0, (s − SNR_high)/SNR_high)
-      g ← clip(g, G_MIN, G_MAX)
-
-    해석: 참조 PPG의 대역내 SNR이 낮으면(측정 자체가 어려운 구간) 동일 RMSE라도
-    더 무겁게 보고, SNR이 충분히 높은 쉬운 구간에서는 가중을 낮춘다.
-    (기존 코드는 두 항이 모두 덧셈이라 고SNR일수록 페널티가 커졌다.)
-
-    검증값: g(3dB이하 시작)=1.00, g(20dB)=0.83, g(25dB)=0.67,
-            g(30dB)=0.50, g(40dB)=0.20(하한), g(-10dB)=3.00(상한)
-    """
-    r_low = max(0.0, (SRE_SNR_LOW - snr_db) / SRE_SNR_LOW)
-    r_high = max(0.0, (snr_db - SRE_SNR_HIGH) / SRE_SNR_HIGH)
-    cri = sigmoid(SRE_SNR_LOW - snr_db)     # critical (저SNR) 게이트
-    si = sigmoid(snr_db - SRE_SNR_HIGH)     # saturation (고SNR) 게이트
-    g = 1.0 + SRE_W_LOW * cri * r_low - SRE_W_HIGH * si * r_high
-    return float(np.clip(g, SRE_G_MIN, SRE_G_MAX)), float(cri), float(si)
-
-
-def compute_sre(y, yhat, fs):
-    """SRE = RMSE × g(SNR_ref).  z-norm 경로에서 RMSE ∈ [0,2]."""
+def compute_rmse(y, yhat):
+    """RMSE(참고용, 비-컴포지트). z-norm 경로에서 RMSE ∈ [0,2]."""
     e = np.ravel(yhat) - np.ravel(y)
-    rmse = float(np.sqrt(np.mean(e ** 2))) if e.size else 0.0
-    snr_db = spectral_snr(y, fs)
-    g, cri, si = snr_weight_g(snr_db)
-    return float(rmse * g), rmse, snr_db, g, cri, si
+    return float(np.sqrt(np.mean(e ** 2))) if e.size else 0.0
 
 
 # ══════════════════════════════════════════════════════════════════
-# 컴포넌트 3: WCR — 일치도 (CCC + Spearman)
+# 컴포넌트 2: WCR — 일치도 (CCC + Spearman)
 # ══════════════════════════════════════════════════════════════════
 
 def concordance_ccc(x, y):
@@ -447,7 +408,7 @@ def compute_wcr(y, yhat, beta=WCR_BETA):
 
 
 # ══════════════════════════════════════════════════════════════════
-# 컴포넌트 4: EDD — 잔차 분포의 정규성 이탈 (JSD)
+# 컴포넌트 3: EDD — 잔차 분포의 정규성 이탈 (JSD)
 # ══════════════════════════════════════════════════════════════════
 
 def compute_edd(y_nobpf, yhat_nobpf, fs, band=CARDIAC_BAND):
@@ -472,7 +433,7 @@ def compute_edd(y_nobpf, yhat_nobpf, fs, band=CARDIAC_BAND):
     '어디에 에너지가 남아있는가'를 직접 본다.
 
     ★ 이 함수에 넣는 y_nobpf/yhat_nobpf는 반드시 preprocess_chunk_edd()를
-    거친(BPF 미적용) 신호여야 한다. BWMD/SRE/WCR용 BPF 신호를 넣으면 분모까지
+    거친(BPF 미적용) 신호여야 한다. BWMD/WCR용 BPF 신호를 넣으면 분모까지
     이미 대역 안에 갇혀있어 비율이 항상 ~1.0으로 나와 무의미해진다.
     """
     e = np.ravel(yhat_nobpf) - np.ravel(y_nobpf)
@@ -796,12 +757,10 @@ def main():
             timing["WCR"].append(time.perf_counter() - t0)
             t0 = time.perf_counter(); edd = compute_edd(y_cat_e, p_cat_e, fs)
             timing["EDD"].append(time.perf_counter() - t0)
-            t0 = time.perf_counter()
-            sre, rmse, snr_db, g, cri, si = compute_sre(y_cat, p_cat, fs)
-            timing["SRE"].append(time.perf_counter() - t0)
+            rmse = compute_rmse(y_cat, p_cat)      # 참고용(diagnostic-only), 비-컴포지트
 
             bwmd = float(np.mean(bwmds))
-            comp = {"BWMD": bwmd, "SRE": sre, "WCR": wcr, "EDD": edd}
+            comp = {"BWMD": bwmd, "WCR": wcr, "EDD": edd}
             scores = {c: normalize_component(c, comp[c], anchors) for c in COMPONENTS}
             rpfi = aggregate(scores, weights, args.agg)
             rpfi_alt = aggregate(scores, weights,
@@ -823,12 +782,11 @@ def main():
             rows.append(dict(
                 dataset=args.dataset, model=model, participant=subj,
                 n_recordings=d["n_rec"], n_chunks=n_chunk, folds="|".join(map(str, d["folds"])),
-                BWMD=bwmd, SRE=sre, WCR=wcr, EDD=edd,
-                s_BWMD=scores["BWMD"], s_SRE=scores["SRE"],
+                BWMD=bwmd, WCR=wcr, EDD=edd,
+                s_BWMD=scores["BWMD"],
                 s_WCR=scores["WCR"], s_EDD=scores["EDD"],
                 RPFI=rpfi, RPFI_alt_agg=rpfi_alt,
                 RMSE=rmse, PSNR_dB=compute_psnr(y_cat, p_cat),
-                SNR_ref_dB=snr_db, g_SNR=g, cri=cri, si=si,
                 CCC=ccc, Spearman=rho,
                 HR_label_bpm=float(np.nanmean(hr_l_a)), HR_pred_bpm=float(np.nanmean(hr_p_a)),
                 HR_MAE_bpm=hr_mae,
@@ -862,9 +820,8 @@ def main():
     if any_clip:
         print("\n  ⚠ 클리핑 발생. anchor는 '평가 대상 모델 풀'이 아니라 외부 기준으로")
         print("    정해야 하므로(R1-2), 이 실행 결과로 anchor를 다시 맞추면 안 됩니다.")
-        print("    SRE anchor는 g(SNR) 부호를 수정하면서 척도가 바뀌었으므로,")
-        print("    rpfi_degradation.py를 수정된 compute_sre로 재실행해 p1-p99를")
-        print("    다시 뽑은 뒤 --anchors 로 주입하십시오.")
+        print("    합성 열화 벤치마크(rpfi_degradation.py)를 재실행해 해당 컴포넌트의")
+        print("    p1-p99를 다시 뽑은 뒤 --anchors 로 주입하십시오.")
 
     # ── 모델 요약 (participant cluster bootstrap CI) ──
     print("\n" + "=" * 78)
@@ -893,7 +850,7 @@ def main():
 
         mrows = [r for r in rows if r["model"] == model]
         for key, lbl in [("HR_MAE_bpm", "HR MAE (bpm)"), ("RMSE", "RMSE"),
-                         ("PSNR_dB", "PSNR (dB)"), ("SNR_ref_dB", "SNR_ref (dB)")]:
+                         ("PSNR_dB", "PSNR (dB)")]:
             v = np.asarray([r[key] for r in mrows], dtype=float)
             line[key] = float(np.nanmean(v))
             print(f"   {lbl:16s}: {np.nanmean(v):8.4f}")
@@ -904,7 +861,7 @@ def main():
     print("계산비용 (컴포넌트당, participant 1인 기준 / BWMD는 chunk 1개 기준)")
     print("=" * 78)
     print(f"  {'Component':>12s} | {'Mean(ms)':>10s} | {'Std(ms)':>10s} | {'Max(ms)':>10s}")
-    for c in ["BWMD", "SRE", "WCR", "EDD"]:
+    for c in COMPONENTS:
         if timing[c]:
             a = np.asarray(timing[c]) * 1000
             print(f"  {c:>12s} | {a.mean():>10.3f} | {a.std():>10.3f} | {a.max():>10.3f}")
@@ -1014,9 +971,6 @@ def main():
                lambda_detrend=args.lambda_detrend, bandpass=do_bpf,
                cardiac_band=CARDIAC_BAND, aggregation=args.agg,
                weights=weights, anchors={k: list(v) for k, v in anchors.items()},
-               sre_params=dict(snr_low=SRE_SNR_LOW, snr_high=SRE_SNR_HIGH,
-                               w_low=SRE_W_LOW, w_high=SRE_W_HIGH,
-                               g_min=SRE_G_MIN, g_max=SRE_G_MAX),
                models=list(ranking), n_boot=args.n_boot, seed=args.seed,
                dtw_backend="fastdtw" if USE_FASTDTW else "naive")
     f4 = out_dir / f"rpfi_config_{tag}.json"

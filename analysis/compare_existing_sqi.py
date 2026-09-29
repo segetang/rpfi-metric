@@ -211,7 +211,7 @@ def find_col(df, keywords):
 
 
 def load_rpfi_participant(results_root, dataset, agg):
-    d = Path(results_root) / f"results_{dataset}_final"
+    d = Path(results_root) / f"results_eval_noSRE"
     cands = sorted(d.glob(f"rpfi_participant_{dataset}_{agg}*.csv"))
     if not cands:
         cands = sorted(d.glob("rpfi_participant_*.csv"))

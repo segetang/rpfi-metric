@@ -2,17 +2,26 @@
 hyperparam_sensitivity.py — 나머지 하이퍼파라미터 민감도 (M11 대응, REAL 파이프라인판)
 =============================================================================
 rpfi_eval.py 실제 소스를 확인하고 전면 재작성. 더 이상 폴백/추측 없음 —
-모든 저수준 함수(dtw_distance, peak_times, median_rr, spectral_snr, sigmoid,
+모든 저수준 함수(dtw_distance, peak_times, median_rr,
 compute_wcr, compute_edd, load_participant_data, normalize_component, aggregate)
 를 rpfi_eval.py에서 **직접 import**해서 쓴다.
 
-BWMD/SRE만 하이퍼파라미터가 모듈 상수(BWMD_LAMBDA_P/A, SRE_SNR_LOW/HIGH 등)로
-박혀있어 함수 인자로 못 넘기므로, compute_bwmd()/compute_sre()의 조합 공식을
-그대로 복제하되 그 값들을 인자로 노출한 래퍼(bwmd_param/sre_param)만 새로
-작성했다. 두 래퍼 모두 rpfi_eval의 실제 저수준 함수(dtw_distance, peak_times,
-median_rr, spectral_snr, sigmoid, _trapz)를 그대로 호출하므로, baseline 값
-(λp=1.0, λa=0.5, dtw_band=0.1, Sc=3, Ss=15)에서 실행하면 rpfi_eval.compute_bwmd
-/compute_sre와 완전히 동일한 결과가 나온다 — 실행 시 self-check로 자동 검증.
+[2026-09-28 수정] rpfi_eval.py에서 SRE(SNR-Adjusted Robust Error) 컴포넌트가
+완전히 제거됨에 따라(COMPONENTS=[BWMD,WCR,EDD]로 축소, compute_sre/spectral_snr/
+sigmoid/SRE_SNR_LOW/HIGH/SRE_W_LOW/HIGH/SRE_G_MIN/MAX 전부 삭제), 이 스크립트도
+맞춰 갱신했다: sre_param() 래퍼와 self-check의 SRE 비교, GRIDS/BASE_PARAMS의
+Sc/Ss(SRE의 SNR collapse/saturation 문턱값) 스윕 항목, comp_means_from_cache의
+SRE 집계를 모두 제거했다. 이제 스윕 가능한 파라미터는 4개뿐이다: dtw_band_frac,
+lambda_p, lambda_a(모두 BWMD), wcr_beta(WCR). 수정 전 버전은 삭제된
+rpfi_eval.compute_sre 등을 그대로 참조하고 있어 즉시 크래시했다(self-check
+단계에서 AttributeError, comp_means_from_cache에서 KeyError: 'SRE').
+
+BWMD만 하이퍼파라미터가 모듈 상수(BWMD_LAMBDA_P/A)로 박혀있어 함수 인자로
+못 넘기므로, compute_bwmd()의 조합 공식을 그대로 복제하되 그 값들을 인자로
+노출한 래퍼(bwmd_param)만 새로 작성했다. 이 래퍼는 rpfi_eval의 실제 저수준
+함수(dtw_distance, peak_times, median_rr, _trapz)를 그대로 호출하므로, baseline 값
+(λp=1.0, λa=0.5, dtw_band=0.1)에서 실행하면 rpfi_eval.compute_bwmd와 완전히
+동일한 결과가 나온다 — 실행 시 self-check로 자동 검증.
 
 방법론 (§4-f 가중치 민감도와 동일 스타일 — weight_sensitivity()를 그대로 참고)
 --------------------------------------------------------------------------
@@ -26,7 +35,7 @@ median_rr, spectral_snr, sigmoid, _trapz)를 그대로 호출하므로, baseline
 성능 참고: DTW가 순수 python 이중루프라 전체 청크를 다 돌리면 느리다.
 --n-participants/--n-chunks-per-participant로 서브샘플링하되, **전처리
 (detrend+BPF, load_participant_data 결과)는 1회만 캐싱**하고 하이퍼파라미터
-스윕 때는 캐시된 청크에 대해 BWMD/SRE/WCR/EDD만 재계산한다 — 즉 파라미터가
+스윕 때는 캐시된 청크에 대해 BWMD/WCR/EDD만 재계산한다 — 즉 파라미터가
 바뀌어도 detrend_tarvainen(O(N^3) 행렬역산)은 절대 다시 안 돈다.
 
 사용법
@@ -41,12 +50,10 @@ median_rr, spectral_snr, sigmoid, _trapz)를 그대로 호출하므로, baseline
         --label "../real data/UBFC_label.npy" --anchors anchors_ubfc.json \
         --joint-random 300
 
-★ --anchors 를 반드시 derive_anchors.py가 뽑은 실제 anchor JSON으로 지정할 것.
-  rpfi_eval.py 안의 DEFAULT_ANCHORS는 스크립트 자체 주석(862~867행)에 적혀있듯
-  SRE 부호수정 이전 값(스케일이 4.4배 다름)이라 그대로 쓰면 anchor가 안 맞는다.
-  --anchors 를 안 주면 이전 세션에서 derive_anchors.py로 확정했던 값
-  (BWMD[0.000621,0.902266], SRE[0.003767,1.485384])을 기본값으로 쓰지만,
-  실제 파일로 다시 확인해서 --anchors로 넘기는 걸 강력히 권장.
+★ --anchors 를 반드시 derive_anchors.py가 뽑은 실제 anchor JSON(BWMD/WCR/EDD
+  3개 항목)으로 지정할 것. --anchors 를 안 주면 이전 세션에서 확정했던 값
+  (BWMD[0.000621,0.902266])을 기본값으로 쓰지만, 실제 파일로 다시 확인해서
+  --anchors로 넘기는 걸 강력히 권장.
 """
 
 import argparse
@@ -68,14 +75,14 @@ except ImportError as e:
              f"       이 스크립트를 rpfi_eval.py와 같은 폴더에서 실행하거나,\n"
              f"       PYTHONPATH에 그 폴더를 추가하세요.")
 
-# derive_anchors.py로 확정했던 최종 anchor (SRE 부호수정 반영 후). --anchors로 덮어쓰길 권장.
-FALLBACK_ANCHORS = {"BWMD": (0.000621, 0.902266), "SRE": (0.003767, 1.485384),
+# derive_anchors.py로 확정했던 최종 anchor (SRE 제거 후 3-컴포넌트판). --anchors로 덮어쓰길 권장.
+FALLBACK_ANCHORS = {"BWMD": (0.000621, 0.902266),
                     "WCR": (0.0, 1.0), "EDD": (0.0, 1.0)}
 
 
 # ══════════════════════════════════════════════════════════════
-# BWMD/SRE 파라미터화 래퍼 — rpfi_eval의 실제 저수준 함수를 그대로 재사용,
-# 조합 공식만 compute_bwmd()/compute_sre()에서 그대로 복제 (모듈 상수 대신 인자로)
+# BWMD 파라미터화 래퍼 — rpfi_eval의 실제 저수준 함수를 그대로 재사용,
+# 조합 공식만 compute_bwmd()에서 그대로 복제 (모듈 상수 대신 인자로)
 # ══════════════════════════════════════════════════════════════
 
 def bwmd_param(y, yhat, fs, lambda_p, lambda_a, dtw_band_frac):
@@ -105,27 +112,6 @@ def bwmd_param(y, yhat, fs, lambda_p, lambda_a, dtw_band_frac):
     return float((dtw_norm + lambda_p * peak_norm) / (1.0 + lambda_a * area_overlap))
 
 
-def sre_param(y, yhat, fs, Sc, Ss, w_low=None, w_high=None, g_min=None, g_max=None):
-    """rpfi_eval.compute_sre()와 동일 공식, Sc/Ss만 인자로 노출.
-    w_low/w_high/g_min/g_max는 M11 범위 밖이라 기본은 rpfi_eval 상수 그대로 사용."""
-    w_low = R.SRE_W_LOW if w_low is None else w_low
-    w_high = R.SRE_W_HIGH if w_high is None else w_high
-    g_min = R.SRE_G_MIN if g_min is None else g_min
-    g_max = R.SRE_G_MAX if g_max is None else g_max
-
-    e = np.ravel(yhat) - np.ravel(y)
-    rmse = float(np.sqrt(np.mean(e ** 2))) if e.size else 0.0
-    snr_db = R.spectral_snr(y, fs)
-
-    r_low = max(0.0, (Sc - snr_db) / Sc)
-    r_high = max(0.0, (snr_db - Ss) / Ss)
-    cri = R.sigmoid(Sc - snr_db)
-    si = R.sigmoid(snr_db - Ss)
-    g = 1.0 + w_low * cri * r_low - w_high * si * r_high
-    g = float(np.clip(g, g_min, g_max))
-    return float(rmse * g)
-
-
 def _self_check(fs=30):
     """baseline 파라미터에서 파라미터화 래퍼가 rpfi_eval의 실제 함수와
     100% 동일한 값을 내는지 실행 시점에 검증. 다르면 즉시 중단(조용히 틀린
@@ -137,16 +123,13 @@ def _self_check(fs=30):
 
     b_real, *_ = R.compute_bwmd(y, yhat, fs)
     b_mine = bwmd_param(y, yhat, fs, R.BWMD_LAMBDA_P, R.BWMD_LAMBDA_A, 0.1)
-    s_real, *_ = R.compute_sre(y, yhat, fs)
-    s_mine = sre_param(y, yhat, fs, R.SRE_SNR_LOW, R.SRE_SNR_HIGH)
 
-    if not (np.isclose(b_real, b_mine) and np.isclose(s_real, s_mine)):
+    if not np.isclose(b_real, b_mine):
         sys.exit(f"[self-check 실패] 파라미터화 래퍼가 rpfi_eval 원본과 다릅니다!\n"
                  f"  BWMD: real={b_real:.8f} mine={b_mine:.8f}\n"
-                 f"  SRE : real={s_real:.8f} mine={s_mine:.8f}\n"
                  f"  rpfi_eval.py가 이 스크립트를 짠 이후 수정됐을 수 있습니다. "
-                 f"위 래퍼를 최신 compute_bwmd/compute_sre와 다시 대조하세요.")
-    print(f"[self-check 통과] baseline에서 BWMD={b_real:.6f}, SRE={s_real:.6f} "
+                 f"위 래퍼를 최신 compute_bwmd와 다시 대조하세요.")
+    print(f"[self-check 통과] baseline에서 BWMD={b_real:.6f} "
          f"(파라미터화 래퍼와 소수점 8자리까지 일치)")
 
 
@@ -192,7 +175,7 @@ def load_all_data(runs_dir, label_full, models, fs, seg_len, do_detrend, do_bpf,
 
 
 def comp_means_from_cache(cache, fs, params):
-    """params: dict(lambda_p, lambda_a, dtw_band_frac, Sc, Ss[, wcr_beta])
+    """params: dict(lambda_p, lambda_a, dtw_band_frac[, wcr_beta])
     weight_sensitivity()와 동일한 순서: participant별 원값 -> 모델 단위 평균."""
     beta = params.get("wcr_beta", R.WCR_BETA)
     out = {}
@@ -207,10 +190,9 @@ def comp_means_from_cache(cache, fs, params):
                           params["dtw_band_frac"]) for c in range(len(L))]))
             y_cat, p_cat = L.ravel(), P.ravel()
             y_cat_e, p_cat_e = L_e.ravel(), P_e.ravel()
-            sre = sre_param(y_cat, p_cat, fs, params["Sc"], params["Ss"])
             wcr, _, _ = R.compute_wcr(y_cat, p_cat, beta=beta)
             edd = R.compute_edd(y_cat_e, p_cat_e, fs)
-            comp_vals["BWMD"].append(bwmd); comp_vals["SRE"].append(sre)
+            comp_vals["BWMD"].append(bwmd)
             comp_vals["WCR"].append(wcr); comp_vals["EDD"].append(edd)
         if comp_vals["BWMD"]:
             out[model] = {c: float(np.mean(v)) for c, v in comp_vals.items()}
@@ -230,16 +212,15 @@ def rpfi_ranking(comp_means, anchors, weights, agg):
 # ══════════════════════════════════════════════════════════════
 
 BASE_PARAMS = dict(lambda_p=R.BWMD_LAMBDA_P, lambda_a=R.BWMD_LAMBDA_A,
-                   dtw_band_frac=0.10, Sc=R.SRE_SNR_LOW, Ss=R.SRE_SNR_HIGH,
-                   wcr_beta=R.WCR_BETA)
+                   dtw_band_frac=0.10, wcr_beta=R.WCR_BETA)
 GRIDS = {
     "dtw_band_frac": [0.05, 0.075, 0.10, 0.15, 0.20, 0.30],
     "lambda_p":      [0.5, 0.75, 1.0, 1.25, 1.5, 2.0],
     "lambda_a":      [0.25, 0.375, 0.5, 0.625, 0.75, 1.0],
-    "Sc":            [1.0, 2.0, 3.0, 4.0, 5.0],
-    "Ss":            [10.0, 12.5, 15.0, 17.5, 20.0],
     "wcr_beta":      [0.3, 0.45, 0.6, 0.75, 0.9],   # 보너스: 이미 파라미터화돼있어 거의 공짜
 }
+# [2026-09-28] Sc/Ss(SRE의 SNR collapse/saturation 문턱값)는 SRE 컴포넌트 자체가
+# 제거되면서 함께 삭제했다 — RPFI 3-컴포넌트판에는 대응하는 파라미터가 없다.
 
 
 def rank_stats(baseline, perturbed):
@@ -276,8 +257,6 @@ def joint_random_sweep(cache, fs, anchors, weights, agg, n_trials, seed=0):
             dtw_band_frac=float(rng.uniform(0.05, 0.30)),
             lambda_p=float(rng.uniform(0.5, 2.0)),
             lambda_a=float(rng.uniform(0.25, 1.0)),
-            Sc=float(rng.uniform(1.0, 5.0)),
-            Ss=float(rng.uniform(10.0, 20.0)),
             wcr_beta=float(rng.uniform(0.3, 0.9)),
         )
         scores = rpfi_ranking(comp_means_from_cache(cache, fs, p), anchors, weights, agg)

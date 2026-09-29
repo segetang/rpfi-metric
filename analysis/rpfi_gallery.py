@@ -18,7 +18,7 @@ rpfi_gallery.py — RPFI 점수대별 실제 파형 시각 갤러리
 
 전처리에 관한 투명성 원칙
 --------------------------
-그림에 쓰는 신호는 **BWMD/WCR/SRE가 실제로 채점한 것과 동일한 전처리**
+그림에 쓰는 신호는 **BWMD/WCR/EDD가 실제로 채점한 것과 동일한 전처리**
 (detrend→BPF→z-norm)를 거친 신호다. 원신호가 아니라 채점된 신호를 보여줘야
 "이 점수가 왜 이렇게 나왔는지"를 정직하게 설명할 수 있다.
 
@@ -34,6 +34,13 @@ rpfi_gallery.py — RPFI 점수대별 실제 파형 시각 갤러리
     gallery/{dataset}_subject_gallery.png
     gallery/{dataset}_gallery_meta.csv   ← 그림에 쓴 정확한 participant/model/RPFI/컴포넌트값
                                             (캡션 작성 및 재현용)
+
+[2026-09-28] SRE(SNR-Adjusted Robust Error) 컴포넌트 제거에 맞춰 수정함(원저자 결정,
+rpfi_eval.py/derive_anchors.py와 동일 조치). 기존에 rpfi_eval에서 compute_sre를 import
+했는데 그 함수 자체가 삭제되어 이 스크립트가 import 단계에서부터 크래시하는 상태였음.
+compute_sre 관련 import/호출/comp 딕셔너리 항목/캡션 문자열을 전부 제거했고, 컴포넌트는
+이제 BWMD/WCR/EDD 3개만 표시한다. BWMD/WCR/EDD 자체의 계산 로직은 무관하므로(SRE는
+독립적으로 계산되던 항목이었음) 값 자체에는 영향 없음 — 표시 항목만 줄었다.
 """
 
 import argparse
@@ -50,7 +57,7 @@ import matplotlib.pyplot as plt
 from rpfi_eval import (
     FS_BY_DATASET, COMPONENTS, DEFAULT_WEIGHTS,
     discover_models, load_participant_data,
-    compute_bwmd, compute_sre, compute_wcr, compute_edd,
+    compute_bwmd, compute_wcr, compute_edd,
     normalize_component, aggregate,
 )
 
@@ -73,10 +80,9 @@ def compute_all_records(runs_dir, label_full, models, fs, seg_len,
             bwmds = [compute_bwmd(L[c], P[c], fs)[0] for c in range(len(L))]
             bwmd = float(np.mean(bwmds))
             y, p = L.ravel(), P.ravel()
-            sre = compute_sre(y, p, fs)[0]
             wcr = compute_wcr(y, p)[0]
             edd = compute_edd(L_e.ravel(), P_e.ravel(), fs)
-            comp = {"BWMD": bwmd, "SRE": sre, "WCR": wcr, "EDD": edd}
+            comp = {"BWMD": bwmd, "WCR": wcr, "EDD": edd}
             scores = {c: normalize_component(c, comp[c], anchors) for c in COMPONENTS}
             rpfi = aggregate(scores, weights, agg_mode)
             records.append(dict(model=model, participant=subj, RPFI=rpfi, comp=comp,
@@ -177,20 +183,20 @@ def plot_gallery(examples, fs, seg_len, out_path, n_chunks_show, title):
         ax.set_title(
             f"{qtag}RPFI={r['RPFI']:.1f}   model={r['model']}   participant={r['participant']}   "
             f"{coverage}\n"
-            f"[BWMD={r['comp']['BWMD']:.3f} SRE={r['comp']['SRE']:.3f} "
+            f"[BWMD={r['comp']['BWMD']:.3f} "
             f"WCR={r['comp']['WCR']:.3f} EDD={r['comp']['EDD']:.3f}]",
             fontsize=8, loc="left")
         if len(idxs) < r["n_chunks"]:
             print(f"    ⚠ {r['model']}/{r['participant']}: 전체 {r['n_chunks']}개 chunk 중 "
                   f"{len(idxs)}개를 고르게 퍼뜨려 표시(chunk index: {idxs}) — "
-                  f"SRE/WCR/EDD는 여전히 전체 {r['n_chunks']}개 기준")
+                  f"WCR/EDD는 여전히 전체 {r['n_chunks']}개 기준")
         ax.set_ylabel("z-score")
         ax.legend(loc="lower right", fontsize=7.5, ncol=2, framealpha=0.9)
 
     axs[-1].set_xlabel("Time (s)")
     fig.suptitle(title, fontsize=11, y=1.01)
     fig.tight_layout()
-    fig.savefig(out_path, dpi=200, bbox_inches="tight")
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  저장: {out_path}")
 
