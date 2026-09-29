@@ -63,6 +63,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+from scipy.signal import welch
 from scipy.stats import kendalltau, spearmanr
 
 # ══════════════════════════════════════════════════════════════
@@ -174,6 +175,21 @@ def load_all_data(runs_dir, label_full, models, fs, seg_len, do_detrend, do_bpf,
     return cache
 
 
+def edd_param(y_e, p_e, fs, band_lo, band_hi, nperseg_max):
+    """EDD with configurable cardiac band and Welch segment length.
+    With (0.75, 3.0, 256) it is identical to rpfi_eval.compute_edd."""
+    e = np.ravel(p_e) - np.ravel(y_e)
+    nperseg = min(int(nperseg_max), e.size)
+    if nperseg < 16:
+        return 0.0
+    freqs, psd = welch(e, fs=fs, nperseg=nperseg)
+    m = (freqs >= band_lo) & (freqs <= band_hi)
+    total = R._trapz(psd, freqs)
+    if total < 1e-12:
+        return 0.0
+    return float(np.clip(R._trapz(psd[m], freqs[m]) / total, 0.0, 1.0))
+
+
 def comp_means_from_cache(cache, fs, params):
     """params: dict(lambda_p, lambda_a, dtw_band_frac[, wcr_beta])
     weight_sensitivity()와 동일한 순서: participant별 원값 -> 모델 단위 평균."""
@@ -191,7 +207,9 @@ def comp_means_from_cache(cache, fs, params):
             y_cat, p_cat = L.ravel(), P.ravel()
             y_cat_e, p_cat_e = L_e.ravel(), P_e.ravel()
             wcr, _, _ = R.compute_wcr(y_cat, p_cat, beta=beta)
-            edd = R.compute_edd(y_cat_e, p_cat_e, fs)
+            edd = edd_param(y_cat_e, p_cat_e, fs, params.get("edd_band_lo", R.CARDIAC_BAND[0]),
+                            params.get("edd_band_hi", R.CARDIAC_BAND[1]),
+                            params.get("edd_nperseg", 256))
             comp_vals["BWMD"].append(bwmd)
             comp_vals["WCR"].append(wcr); comp_vals["EDD"].append(edd)
         if comp_vals["BWMD"]:
@@ -212,12 +230,17 @@ def rpfi_ranking(comp_means, anchors, weights, agg):
 # ══════════════════════════════════════════════════════════════
 
 BASE_PARAMS = dict(lambda_p=R.BWMD_LAMBDA_P, lambda_a=R.BWMD_LAMBDA_A,
-                   dtw_band_frac=0.10, wcr_beta=R.WCR_BETA)
+                   dtw_band_frac=0.10, wcr_beta=R.WCR_BETA,
+                   edd_band_lo=R.CARDIAC_BAND[0], edd_band_hi=R.CARDIAC_BAND[1], edd_nperseg=256)
 GRIDS = {
     "dtw_band_frac": [0.05, 0.075, 0.10, 0.15, 0.20, 0.30],
     "lambda_p":      [0.5, 0.75, 1.0, 1.25, 1.5, 2.0],
     "lambda_a":      [0.25, 0.375, 0.5, 0.625, 0.75, 1.0],
     "wcr_beta":      [0.3, 0.45, 0.6, 0.75, 0.9],   # 보너스: 이미 파라미터화돼있어 거의 공짜
+    # [2026-09-29] EDD settings (reviewer R1 Major Comment 11)
+    "edd_band_lo":   [0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0],
+    "edd_band_hi":   [2.5, 2.75, 3.0, 3.25, 3.5, 4.0],
+    "edd_nperseg":   [64, 128, 256, 512],
 }
 # [2026-09-28] Sc/Ss(SRE의 SNR collapse/saturation 문턱값)는 SRE 컴포넌트 자체가
 # 제거되면서 함께 삭제했다 — RPFI 3-컴포넌트판에는 대응하는 파라미터가 없다.
