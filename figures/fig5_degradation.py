@@ -3,9 +3,9 @@
 Left: reference (black) and the degraded signal at two levels, one 10 s excerpt.
 Right: median component scores and RPFI across the 16 paired trajectories (2 frame rates x 8 repetitions),
 with the interquartile range shaded.
-Row D shows the heart-rate bias, which compresses time by 1 + 0.5 x level from the window start. Its x-axis is the
-heart-rate error in percent (levels 0-0.1), and its excerpt is the last 10 s of the 60 s window, where the accumulated
-phase difference is largest.
+Row D shows the heart-rate bias, which compresses time by 1 + 0.5 x level from the window start. Its left panel shows
+the timing offset that accumulates over the 60 s window, against the Rhythm tolerance and the WCR lag cap of this
+example's RR interval; its right panel uses the heart-rate error in percent (levels 0-0.1) as the x-axis.
 """
 import numpy as np
 import pandas as pd
@@ -35,19 +35,28 @@ for k, (name, title, target, lvs, lv_max, xscale) in enumerate(ROWS):
     di = list(DD.DEG).index(name)
     col = COMP[target]
     ax = fig.add_subplot(gs[k, 0])
-    sg = slice(50 * fs, 60 * fs) if name == "hr_bias" else seg
-    tx = tt + 50 if name == "hr_bias" else tt                         # row D: time within the 60 s window
-    ax.plot(tx, R.preprocess_chunk(ref[sg], fs), color=REF, lw=1.5, label="Reference")
-    for lv, alpha, lw in ((lvs[0], 0.45, 1.1), (lvs[1], 1.0, 1.3)):
-        rng = np.random.default_rng(1_000_000 + 10_000 * fs + 100 * rep + di)
-        pred = D.win(DD.DEG[name](yb.copy(), fs, lv, rng, hr), fs)
-        lab = f"HR +{50 * lv:g}%" if name == "hr_bias" else f"level {lv:g}"
-        ax.plot(tx, R.preprocess_chunk(pred[sg], fs), color=col if target != "RPFI" else "#555555", lw=lw,
-                alpha=alpha, label=lab)
-    ax.set_xlabel("Time (s)"); ax.set_ylabel("Amplitude (a.u.)")
-    lo, hi = ax.get_ylim(); ax.set_ylim(lo, hi + 0.5 * (hi - lo))
-    ax.legend(loc="upper right", ncol=3, frameon=False, fontsize=9, columnspacing=1.0, handlelength=1.6)
-    panel_label(ax, "ABCD"[k], title)
+    if name == "hr_bias":
+        # the waveforms only look like a lag here, so show how the beat-timing offset accumulates instead
+        rr = 60.0 / hr
+        tw = np.linspace(0, 60, 601)
+        for lv, alpha, lw in ((lvs[0], 0.55, 1.6), (lvs[1], 1.0, 2.0)):
+            ax.plot(tw, 0.5 * lv * tw, color="#555555", alpha=alpha, lw=lw, label=f"HR +{50 * lv:g}%")
+        for frac, txt, ls in ((0.25, "WCR lag cap (0.25 RR)", "--"), (0.15, "Rhythm tolerance (0.15 RR)", ":")):
+            ax.axhline(frac * rr, color="#999999", lw=1.2, ls=ls, label=txt)
+        ax.set_xlim(0, 60); ax.set_ylim(0, 1.0)
+        ax.set_xlabel("Time in the 60 s window (s)"); ax.set_ylabel("Timing offset (s)")
+        ax.legend(loc="upper left", ncol=2, frameon=False, fontsize=9, columnspacing=1.2, handlelength=1.8)
+        panel_label(ax, "ABCD"[k], title)
+    else:
+        ax.plot(tt, R.preprocess_chunk(ref[seg], fs), color=REF, lw=1.5, label="Reference")
+        for lv, alpha, lw in ((lvs[0], 0.45, 1.1), (lvs[1], 1.0, 1.3)):
+            rng = np.random.default_rng(1_000_000 + 10_000 * fs + 100 * rep + di)
+            pred = D.win(DD.DEG[name](yb.copy(), fs, lv, rng, hr), fs)
+            ax.plot(tt, R.preprocess_chunk(pred[seg], fs), color=col, lw=lw, alpha=alpha, label=f"level {lv:g}")
+        ax.set_xlabel("Time (s)"); ax.set_ylabel("Amplitude (a.u.)")
+        lo, hi = ax.get_ylim(); ax.set_ylim(lo, hi + 0.5 * (hi - lo))
+        ax.legend(loc="upper right", ncol=3, frameon=False, fontsize=9, columnspacing=1.0, handlelength=1.6)
+        panel_label(ax, "ABCD"[k], title)
 
     ax = fig.add_subplot(gs[k, 1])
     g = raw[(raw.degradation == name) & (raw.level <= lv_max + 1e-9)]
