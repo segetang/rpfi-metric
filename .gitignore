@@ -66,3 +66,7 @@ logs/
 *.jpeg
 !docs/figures/*.png
 !docs/figures/*.jpg
+
+# transfer files
+*.bundle
+*.zip

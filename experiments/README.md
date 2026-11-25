@@ -28,7 +28,7 @@ cross-dataset directions.
 
 | Step | Script | Output (in the working folder) | Copied to |
 |---|---|---|---|
-| 0 | `src/` pipeline (main README of tag `v1`), then `python rpfi/rpfi_eval.py` per condition | `runs/`, `rpfi_participant_*_geometric.csv` | — |
+| 0 | `src/` pipeline (README of [rpfi-metric_v1](https://github.com/segetang/rpfi-metric_v1)), then `python rpfi/rpfi_eval.py` per condition | `runs/`, `rpfi_participant_*_geometric.csv` | — |
 | 1 | `run_newsys_all.py` (calls `recompute_newsys.py`) | `newsys_recompute/newsys_participant_ALL.csv` | `results/scores/` |
 | 2 | `run_hr_all.py` (calls `recompute_hr.py`) | `hr_recompute/hr_participant_ALL.csv` | `results/scores/` |
 | 3 | `sensitivity_v2.py` | `sensitivity_v2/sensitivity_ALL.csv` | `results/robustness/` |

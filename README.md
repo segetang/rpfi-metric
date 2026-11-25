@@ -21,8 +21,8 @@ Reported alongside: the constant lag Δt (not scored), a polarity-inversion flag
 and, at the model level, the participant-mean RPFI, its coverage (fraction of participants with a defined
 SHAPE) and RPFI given coverage.
 
-> The earlier version of this metric (v1: BWMD / WCR / EDD with fixed anchors) is preserved at the git tag
-> [`v1`](../../tree/v1).
+> The earlier version of this metric (v1: BWMD / WCR / EDD with fixed anchors) is kept in a separate repository,
+> [segetang/rpfi-metric_v1](https://github.com/segetang/rpfi-metric_v1).
 
 ---
 
