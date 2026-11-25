@@ -61,7 +61,7 @@ def main():
             shutil.copy2(work / rep, TAB / rep)
             print(f"  wrote results/tables/{rep}")
     for script in ("model_tables.py", "component_tables.py", "exp1_secondary.py", "exp2_snr.py",
-                   "weight_sensitivity.py", "sync_drift_summary.py", "hr_matched_pairs.py"):
+                   "weight_sensitivity.py", "sync_drift_summary.py", "hr_matched_pairs.py", "coherence_check.py"):
         run([ROOT / "analysis" / script], ROOT)
     print("\nDone. All tables are in results/tables/.")
 

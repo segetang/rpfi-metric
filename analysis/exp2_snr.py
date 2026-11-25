@@ -59,13 +59,19 @@ def main():
 
     pri, feats = morph_units()
     pri = pri.merge(snr, on=K, how="left", validate="1:1")
-    assert pri.SNR_dB.notna().all()
+    hn = pd.read_csv(C.RES / "scores" / "hr_participant_ALL.csv")[K + ["HR_MAE_bpm"]].rename(columns={"HR_MAE_bpm": "HR_MAE_new"})
+    pri = pri.merge(hn, on=K, how="left", validate="1:1")
+    assert pri.SNR_dB.notna().all() and pri.HR_MAE_new.notna().all()
     tests = {
         "E1 rho(SHAPE, morph error)": lambda d: spearmanr(d.sh_SHAPE, d.MORPH_ERR)[0],
         "E2 partial rho | HR MAE, RMSE, Pearson": lambda d: A.partial_spearman(d.sh_SHAPE.values, d.MORPH_ERR.values, d[A.CONV].values),
         "E2 + SNR partial rho | HR MAE, RMSE, Pearson, SNR": lambda d: A.partial_spearman(
             d.sh_SHAPE.values, d.MORPH_ERR.values, d[A.CONV + ["SNR_dB"]].values),
-        "rho(SNR, morph error)": lambda d: spearmanr(-d.SNR_dB, d.MORPH_ERR)[0],
+        "rho(-SNR, morph error)": lambda d: spearmanr(-d.SNR_dB, d.MORPH_ERR)[0],
+        # HR MAE from the estimator of the paper (results/scores/hr_participant_ALL.csv) instead of the frozen Welch-bin one
+        "rho(HR MAE interpolated, morph error)": lambda d: spearmanr(d.HR_MAE_new, d.MORPH_ERR)[0],
+        "E2 partial rho | HR MAE interpolated, RMSE, Pearson": lambda d: A.partial_spearman(
+            d.sh_SHAPE.values, d.MORPH_ERR.values, d[["HR_MAE_new", "RMSE", "Pearson"]].values),
     }
     print(f"  Experiment 2: {len(pri)} units, {pri.participant_key.nunique()} participants, features {feats}")
     for name, fn in tests.items():
@@ -80,7 +86,7 @@ def main():
         "C1 partial rho(RHY, tracking error | ctrl)": lambda d: AC.pcor(d.RHY.values, d.PRV_ERR.values, d[ctrl].values),
         "C1 + SNR partial rho | ctrl, SNR": lambda d: AC.pcor(d.RHY.values, d.PRV_ERR.values, d[ctrl + ["SNR_dB"]].values),
         "rho(RHY, tracking error)": lambda d: spearmanr(d.RHY, d.PRV_ERR)[0],
-        "rho(SNR, tracking error)": lambda d: spearmanr(-d.SNR_dB, d.PRV_ERR)[0],
+        "rho(-SNR, tracking error)": lambda d: spearmanr(-d.SNR_dB, d.PRV_ERR)[0],
     }
     print(f"  Experiment 2c: {len(pc)} units, {pc.key.nunique()} participants")
     for name, fn in tests.items():
