@@ -1,0 +1,50 @@
+Experiment 1 without CCC matching (exploratory)
+leakage check: passed
+  P1  COHFACE hold-out, subject-disjoint  (cases 960, recordings 48, subjects 15)
+    RPFI      BA = 0.627  [0.604, 0.649]
+    conv      BA = 0.593  [0.565, 0.623]
+    conv+SNR  BA = 0.706  [0.662, 0.750]
+    all       BA = 0.830  [0.800, 0.865]
+    RPFI+dt   BA = 0.747  [0.709, 0.781]
+    RPFI - conv      = +0.033  [+0.006, +0.057]
+    RPFI - conv+SNR  = -0.079  [-0.130, -0.027]
+    all - conv+SNR  = +0.124  [+0.090, +0.159]
+    RPFI+dt - conv+SNR  = +0.041  [-0.010, +0.086]
+    CCC of the cases by family (median [IQR]): drift 0.532 [0.092, 0.824], local 0.959 [0.928, 0.983], shape 0.957 [0.923, 0.980]
+    RPFI classifier, prediction share per distortion:
+    col_0                    drift  local  shape
+    g     distortion                            
+    drift constant_lag        0.00   1.00   0.00
+          hr_error            0.99   0.00   0.01
+          rsa_removal         0.64   0.20   0.17
+    local extra_beats         0.00   0.98   0.02
+          ibi_jitter          0.10   0.77   0.12
+          missed_beats        0.00   1.00   0.00
+          white_noise         0.09   0.73   0.18
+    shape notch_attenuation   0.04   0.68   0.28
+          peak_broadening     0.03   0.00   0.97
+          peak_sharpening     0.23   0.61   0.16
+  P2  PURE hold-out, recording-disjoint  (cases 380, recordings 19, subjects 10)
+    RPFI      BA = 0.653  [0.624, 0.677]
+    conv      BA = 0.678  [0.649, 0.709]
+    conv+SNR  BA = 0.758  [0.714, 0.795]
+    all       BA = 0.831  [0.797, 0.860]
+    RPFI+dt   BA = 0.712  [0.681, 0.746]
+    RPFI - conv      = -0.025  [-0.076, +0.021]
+    RPFI - conv+SNR  = -0.105  [-0.164, -0.040]
+    all - conv+SNR  = +0.073  [+0.047, +0.097]
+    RPFI+dt - conv+SNR  = -0.046  [-0.094, +0.008]
+    CCC of the cases by family (median [IQR]): drift 0.432 [0.072, 0.792], local 0.964 [0.928, 0.983], shape 0.936 [0.867, 0.978]
+    RPFI classifier, prediction share per distortion:
+    col_0                    drift  local  shape
+    g     distortion                            
+    drift constant_lag        0.00   1.00   0.00
+          hr_error            1.00   0.00   0.00
+          rsa_removal         0.76   0.21   0.03
+    local extra_beats         0.00   1.00   0.00
+          ibi_jitter          0.05   0.74   0.21
+          missed_beats        0.00   0.97   0.03
+          white_noise         0.00   0.95   0.05
+    shape notch_attenuation   0.03   0.84   0.13
+          peak_broadening     0.21   0.00   0.79
+          peak_sharpening     0.11   0.45   0.45

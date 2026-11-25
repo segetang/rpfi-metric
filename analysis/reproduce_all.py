@@ -1,7 +1,8 @@
 """Regenerate every paper table and report from the CSV files in results/ (no raw data needed).
 
 Steps
-  1. pre-registered analyses (experiments/): exp1_confirm.py, exp2_analyze.py, exp2b_analyze.py, exp2c_analyze.py
+  1. pre-registered analyses (experiments/): exp1_confirm.py, exp2_analyze.py, exp2b_analyze.py, exp2c_analyze.py,
+     and the exploratory exp1_severity.py (evaluation of the stored cases)
      run in a scratch folder laid out the way those scripts expect; their reports are copied to results/tables/
   2. table scripts (analysis/): model_tables.py, component_tables.py, exp1_secondary.py, exp2_snr.py,
      weight_sensitivity.py
@@ -35,7 +36,7 @@ def stage(work):
         "hr_recompute/hr_participant_ALL.csv": RES / "scores" / "hr_participant_ALL.csv",
         "sensitivity_v2/sensitivity_ALL.csv": RES / "robustness" / "sensitivity_ALL.csv",
     }
-    for f in (RES / "exp1").glob("exp1_cases_*.csv"):
+    for f in list((RES / "exp1").glob("exp1_cases_*.csv")) + list((RES / "exp1").glob("exp1sev_cases_*.csv")):
         links[f.name] = f
     for f in (ROOT / "mappings").glob("mapping_*.csv"):
         links[f.name] = f
@@ -54,11 +55,13 @@ def main():
         run([EXP / "exp2_analyze.py"], work)
         run([EXP / "exp2b_analyze.py"], work)
         run([EXP / "exp2c_analyze.py"], work)
-        for rep in ("exp1_confirm_report.txt", "exp2_report.txt", "exp2b_report.txt", "exp2c_report.txt"):
+        run([EXP / "exp1_severity.py", "--analyze-only"], work)
+        for rep in ("exp1_confirm_report.txt", "exp2_report.txt", "exp2b_report.txt", "exp2c_report.txt",
+                    "exp1_severity_report.txt"):
             shutil.copy2(work / rep, TAB / rep)
             print(f"  wrote results/tables/{rep}")
     for script in ("model_tables.py", "component_tables.py", "exp1_secondary.py", "exp2_snr.py",
-                   "weight_sensitivity.py", "sync_drift_summary.py"):
+                   "weight_sensitivity.py", "sync_drift_summary.py", "hr_matched_pairs.py"):
         run([ROOT / "analysis" / script], ROOT)
     print("\nDone. All tables are in results/tables/.")
 

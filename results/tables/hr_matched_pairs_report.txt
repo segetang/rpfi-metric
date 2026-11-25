@@ -1,0 +1,15 @@
+HR-matched model pairs (exploratory; UBFC-rPPG and PURE within-dataset)
+rule: both HR MAE <= 2.0 bpm, |dHR MAE| <= 0.3 bpm; gap: |dRPFI| >= 0.1
+  [all] matched pairs 470, participants 32, median |dHR MAE| 0.111 bpm, median dRPFI 0.038, gap pairs 96 (20.4%)
+  [ubfc] matched pairs 415, participants 27, median |dHR MAE| 0.108 bpm, median dRPFI 0.038, gap pairs 88 (21.2%)
+  [pure] matched pairs 55, participants 5, median |dHR MAE| 0.151 bpm, median dRPFI 0.033, gap pairs 8 (14.5%)
+share of matched pairs with a gap: 0.204 [0.125, 0.288] (n=470)
+gap pairs with the same sign in odd and even chunks: 0.969 [0.925, 1.000] (n=96); chance 0.5
+  (pairs without a gap: 0.749 [0.698, 0.784], n=374)
+dominant component in gap pairs: SHAPE 77 (80.2%), WCR 14 (14.6%), RHY 4 (4.2%), coverage 1 (1.0%)
+  SHAPE-dominant gap pairs (n=77): model worse on SHAPE has the larger morphology error in 0.805 [0.689, 0.950] (n=77), the larger tracking error in 0.649 [0.468, 0.879] (n=77)
+  RHY-dominant gap pairs (n=4): model worse on RHY has the larger morphology error in 1.000 [1.000, 1.000] (n=4), the larger tracking error in 1.000 [1.000, 1.000] (n=4)
+  WCR-dominant gap pairs (n=14): model worse on WCR has the larger morphology error in 0.929 [0.699, 1.000] (n=14), the larger tracking error in 1.000 [1.000, 1.000] (n=14)
+  SHAPE-dominant gap pairs: model with the lower SNR has the larger morphology error in 0.727 [0.543, 0.891] (n=77)
+Spearman between dRPFI and |dSNR| over matched pairs: 0.526
+gap pairs in which the higher-RPFI model also has the higher SNR: 0.896 (n=96)
