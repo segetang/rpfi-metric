@@ -1,0 +1,26 @@
+======================================================================
+Experiment 2c - primary criterion C1 (UBFC and PURE, within-dataset)
+======================================================================
+  units 447 / 450 (excluded, e.g. common span < 20 s: 3), participants 50
+  C1 partial rho(RHY, HR tracking error | 1-WCR, 1-WCR_aligned, SHAPE, HR MAE, RMSE) = 0.396 [0.228, 0.511]  -> met
+
+======================================================================
+Secondary (reported only)
+======================================================================
+  [Spearman rho with the HR tracking error, primary set]
+    RHY       ρ = +0.624 [+0.462, +0.742]
+    F1        ρ = -0.593 [-0.720, -0.420]
+    nIBIE     ρ = +0.686 [+0.575, +0.770]
+    bWCR      ρ = +0.506 [+0.320, +0.655]
+    bWCRa     ρ = +0.548 [+0.358, +0.690]
+    sh_SHAPE  ρ = +0.277 [+0.075, +0.464]
+    HR_MAE    ρ = +0.424 [+0.236, +0.579]
+    RMSE      ρ = +0.504 [+0.319, +0.653]
+    sub-score F1 partial rho = -0.270 [-0.407, -0.092]
+    sub-score nIBIE partial rho = +0.544 [+0.363, +0.675]
+    UBFC within n= 357  C1 partial rho = 0.377 [0.186, 0.521]
+    PURE within n=  90  C1 partial rho = 0.455 [0.068, 0.643]
+    cross    n= 799  C1 partial rho = 0.306 [0.176, 0.417]
+  [sensitivity: 3 missing included as worst error] C1 partial rho = 0.379
+  [missing rate by model]  {'bilstm': 0.0, 'bimamba': 0.0, 'bimamba_blend': 0.0, 'lstm': 0.0, 'mamba': 0.0, 'physdiff': 0.02, 'pos': 0.04, 'rnn': 0.0, 'transformer': 0.0}
+  [median SD of the reference instantaneous HR] {'pure': 3.12, 'ubfc': 6.28} bpm  | median tracking error 5.17 bpm

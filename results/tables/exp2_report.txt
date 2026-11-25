@@ -1,0 +1,42 @@
+======================================================================
+A. Feature selection (reference signal only)
+======================================================================
+  rule: participants with valid-beat rate >= 80% are >= 90% in both UBFC and PURE, split-half reliability (Spearman-Brown) >= 0.75 -> up to 4 by reliability (relaxed to 0.5 if fewer than 2)
+      feature  valid_ubfc  valid_pure  split_half_rel  pass_valid
+      Tsp/Tpi         1.0         1.0           0.965        True
+    Tpw50/Tpi         1.0         1.0           0.989        True
+        Ab/Aa         1.0         1.0           0.956        True
+          AGI         1.0         1.0           0.899        True
+    Tsys/Tdia         1.0         1.0           0.964        True
+   deltaT/Tpi         1.0         1.0           0.972        True
+  Tdw50/Tsw50         1.0         1.0           0.959        True
+  selected: ['Tpw50/Tpi', 'deltaT/Tpi', 'Tsp/Tpi', 'Tsys/Tdia']
+
+======================================================================
+C. Primary criteria (UBFC and PURE within-dataset, participant-cluster bootstrap B=2000)
+======================================================================
+  units 450 (model x participant), participants 50, excluded (morphology error not computable) 0
+  E1  Spearman rho(SHAPE, morphology error) = 0.487  [0.336, 0.607]  -> met (criterion rho >= 0.30, CI lower bound > 0)
+  E2  partial rho | HR MAE, RMSE, Pearson = 0.414  [0.271, 0.534]  -> met (criterion CI lower bound > 0)
+  verdict: confirmed
+
+======================================================================
+D. Secondary (reported only, not used for the verdict)
+======================================================================
+  [correlation of each metric with the morphology error, primary set]  Spearman rho [95% CI] / repeated-measures correlation (within participant, across models)
+    sh_SHAPE   rho = +0.487 [+0.336, +0.607]   rm = +0.290 [+0.200, +0.391]
+    HR_MAE_bpm rho = +0.138 [-0.019, +0.295]   rm = +0.103 [+0.005, +0.198]
+    RMSE       rho = +0.302 [+0.150, +0.433]   rm = +0.247 [+0.118, +0.381]
+    Pearson    rho = -0.302 [-0.433, -0.150]   rm = -0.194 [-0.325, -0.070]
+    1-WCR      rho = +0.297 [+0.146, +0.429]   rm = +0.183 [+0.059, +0.311]
+    RHY        rho = +0.224 [+0.067, +0.371]   rm = +0.290 [+0.183, +0.404]
+  [per feature, Spearman rho with SHAPE]
+    Tpw50/Tpi    rho = +0.381 (n=450)
+    deltaT/Tpi   rho = +0.074 (n=450)
+    Tsp/Tpi      rho = +0.269 (n=450)
+    Tsys/Tdia    rho = +0.341 (n=450)
+  [per dataset / cross conditions]
+    UBFC within          n= 360  E1 rho = 0.461 [0.299, 0.600]   E2 partial rho = 0.422 [0.263, 0.556]
+    PURE within          n=  90  E1 rho = 0.580 [0.235, 0.820]   E2 partial rho = 0.407 [0.131, 0.640]
+    all cross-dataset conditions n= 800  E1 rho = 0.266 [0.155, 0.372]   E2 partial rho = 0.275 [0.193, 0.351]
+  [sensitivity: 46 SHAPE-gated units excluded]  E1 rho = 0.554, E2 partial rho = 0.478

@@ -1,0 +1,73 @@
+leakage check passed: hold-out recordings do not overlap exploration recordings
+
+======================================================================
+Primary evaluation (pre-registered criteria, families = shape / local / drift)
+======================================================================
+  P1  COHFACE hold-out, subject-disjoint  (cases 893, recordings 48, subjects 15)
+    RPFI  BA = 0.799  [0.742, 0.850]
+    conv  BA = 0.406  [0.390, 0.423]
+    ΔBA = +0.393  [+0.336, +0.445]
+    -> S1 met, S2 met
+  P2  PURE hold-out, recording-disjoint  (cases 352, recordings 19, subjects 10)
+    RPFI  BA = 0.723  [0.659, 0.800]
+    conv  BA = 0.360  [0.333, 0.389]
+    ΔBA = +0.364  [+0.271, +0.463]
+    -> S1 met, S2 met
+
+  final verdict: confirmed   (P1 S1/S2 = True/True, P2 S1/S2 = True/True)
+
+======================================================================
+Secondary (reported only, not used for the verdict)
+======================================================================
+  all COHFACE hold-out  (cases 1859, recordings 99, subjects 44)
+    RPFI  BA = 0.772  [0.738, 0.804]
+    conv  BA = 0.419  [0.407, 0.431]
+    ΔBA = +0.353  [+0.317, +0.386]
+  pooled training (exploration ubfc+pure+cohface) -> pure hold-out  (cases 352, recordings 19, subjects 10)
+    RPFI  BA = 0.728  [0.665, 0.803]
+    conv  BA = 0.346  [0.316, 0.375]
+    ΔBA = +0.382  [+0.294, +0.479]
+  pooled training (exploration ubfc+pure+cohface) -> cohface hold-out  (cases 1859, recordings 99, subjects 44)
+    RPFI  BA = 0.735  [0.703, 0.767]
+    conv  BA = 0.342  [0.333, 0.352]
+    ΔBA = +0.393  [+0.361, +0.424]
+  original 3 families (offset/shape/timing) - pure hold-out  (cases 352, recordings 19, subjects 10)
+    RPFI  BA = 0.502  [0.459, 0.552]
+    conv  BA = 0.357  [0.341, 0.375]
+    ΔBA = +0.145  [+0.088, +0.207]
+  original 3 families (offset/shape/timing) - cohface hold-out  (cases 1859, recordings 99, subjects 44)
+    RPFI  BA = 0.554  [0.533, 0.575]
+    conv  BA = 0.435  [0.420, 0.449]
+    ΔBA = +0.119  [+0.096, +0.142]
+
+  SHAPE alone, shape vs. non-shape (logistic trained on exploration -> hold-out evaluation)
+    pure: BA 0.752 | detection rate per shape distortion {'notch_attenuation': 0.5, 'peak_broadening': 1.0, 'peak_sharpening': 0.28} | false-positive rate on non-shape 0.123
+    cohface: BA 0.744 | detection rate per shape distortion {'notch_attenuation': 0.55, 'peak_broadening': 1.0, 'peak_sharpening': 0.11} | false-positive rate on non-shape 0.097
+
+  prediction distribution per distortion (primary classifier, RPFI)
+   [cohface (subject-disjoint)]
+    col_0                    drift  local  shape
+    g     distortion                            
+    drift constant_lag        0.84   0.16   0.00
+          hr_error            0.98   0.02   0.00
+          rsa_removal         0.74   0.20   0.05
+    local extra_beats         0.26   0.53   0.21
+          ibi_jitter          0.00   1.00   0.00
+          missed_beats        0.28   0.72   0.00
+          white_noise         0.08   0.84   0.07
+    shape notch_attenuation   0.02   0.18   0.80
+          peak_broadening     0.00   0.00   1.00
+          peak_sharpening     0.29   0.34   0.37
+   [pure]
+    col_0                    drift  local  shape
+    g     distortion                            
+    drift constant_lag        0.95   0.05   0.00
+          hr_error            0.95   0.05   0.00
+          rsa_removal         0.68   0.24   0.08
+    local extra_beats         0.12   0.72   0.16
+          ibi_jitter          0.00   0.87   0.13
+          missed_beats        0.26   0.71   0.03
+          white_noise         0.03   0.89   0.08
+    shape notch_attenuation   0.22   0.41   0.38
+          peak_broadening     0.00   0.00   1.00
+          peak_sharpening     0.41   0.59   0.00

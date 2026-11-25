@@ -1,0 +1,82 @@
+analysis,condition,tau_median,tau_p05,top1_same
+"Dirichlet alpha=1, 1000 draws",ubfc,1.0,0.8333333333333334,1.0
+"Dirichlet alpha=1, 1000 draws",pure,1.0,0.9444444444444445,1.0
+"Dirichlet alpha=1, 1000 draws",cohface,0.9444444444444445,0.8333333333333334,0.582
+"Dirichlet alpha=1, 1000 draws",pure_to_ubfc,0.7142857142857142,0.2857142857142857,0.405
+"Dirichlet alpha=1, 1000 draws",cohface_to_ubfc,0.9285714285714285,0.7857142857142856,0.99
+"Dirichlet alpha=1, 1000 draws",ubfc_to_pure,0.9999999999999998,0.9285714285714285,1.0
+"Dirichlet alpha=1, 1000 draws",cohface_to_pure,0.7857142857142856,0.6428571428571428,1.0
+"Dirichlet alpha=1, 1000 draws",ubfc_to_cohface,0.9999999999999998,0.9999999999999998,1.0
+"Dirichlet alpha=1, 1000 draws",pure_to_cohface,0.8571428571428571,0.42857142857142855,0.67
+"Dirichlet alpha=10, 1000 draws",ubfc,1.0,1.0,1.0
+"Dirichlet alpha=10, 1000 draws",pure,1.0,0.9444444444444445,1.0
+"Dirichlet alpha=10, 1000 draws",cohface,1.0,0.8888888888888888,0.748
+"Dirichlet alpha=10, 1000 draws",pure_to_ubfc,0.8571428571428571,0.7857142857142856,0.473
+"Dirichlet alpha=10, 1000 draws",cohface_to_ubfc,0.9999999999999998,0.9285714285714285,1.0
+"Dirichlet alpha=10, 1000 draws",ubfc_to_pure,0.9999999999999998,0.9285714285714285,1.0
+"Dirichlet alpha=10, 1000 draws",cohface_to_pure,0.9285714285714285,0.7857142857142856,1.0
+"Dirichlet alpha=10, 1000 draws",ubfc_to_cohface,0.9999999999999998,0.9999999999999998,1.0
+"Dirichlet alpha=10, 1000 draws",pure_to_cohface,0.9999999999999998,0.8571428571428571,0.98
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",ubfc,1.0,,1.0
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",pure,1.0,,1.0
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",cohface,0.8888888888888888,,0.0
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",pure_to_ubfc,0.7857142857142856,,1.0
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",cohface_to_ubfc,0.9285714285714285,,1.0
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",ubfc_to_pure,0.9285714285714285,,1.0
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",cohface_to_pure,0.9285714285714285,,1.0
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",ubfc_to_cohface,0.9999999999999998,,1.0
+"weights (0.5,0.25,0.25) (SHAPE,WCR,RHY)",pure_to_cohface,0.9999999999999998,,1.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",ubfc,1.0,,1.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",pure,0.9444444444444445,,1.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",cohface,1.0,,1.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",pure_to_ubfc,0.7857142857142856,,0.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",cohface_to_ubfc,0.9285714285714285,,1.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",ubfc_to_pure,0.9999999999999998,,1.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",cohface_to_pure,0.9285714285714285,,1.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",ubfc_to_cohface,0.9999999999999998,,1.0
+"weights (0.25,0.5,0.25) (SHAPE,WCR,RHY)",pure_to_cohface,0.8571428571428571,,1.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",ubfc,1.0,,1.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",pure,1.0,,1.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",cohface,1.0,,1.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",pure_to_ubfc,0.9285714285714285,,0.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",cohface_to_ubfc,0.9285714285714285,,1.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",ubfc_to_pure,0.9999999999999998,,1.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",cohface_to_pure,0.9285714285714285,,1.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",ubfc_to_cohface,0.9999999999999998,,1.0
+"weights (0.25,0.25,0.5) (SHAPE,WCR,RHY)",pure_to_cohface,0.9285714285714285,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,ubfc,1.0,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,pure,1.0,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,cohface,0.9444444444444445,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,pure_to_ubfc,0.8571428571428571,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,cohface_to_ubfc,0.9999999999999998,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,ubfc_to_pure,0.9999999999999998,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,cohface_to_pure,0.9285714285714285,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,ubfc_to_cohface,0.9999999999999998,,1.0
+beat-matching tolerance 0.15 -> 0.10 x RR,pure_to_cohface,0.9999999999999998,,1.0
+beat-matching tolerance 0.15 -> 0.20 x RR,ubfc,0.9444444444444445,,1.0
+beat-matching tolerance 0.15 -> 0.20 x RR,pure,1.0,,1.0
+beat-matching tolerance 0.15 -> 0.20 x RR,cohface,1.0,,1.0
+beat-matching tolerance 0.15 -> 0.20 x RR,pure_to_ubfc,0.8571428571428571,,0.0
+beat-matching tolerance 0.15 -> 0.20 x RR,cohface_to_ubfc,0.9285714285714285,,1.0
+beat-matching tolerance 0.15 -> 0.20 x RR,ubfc_to_pure,0.9999999999999998,,1.0
+beat-matching tolerance 0.15 -> 0.20 x RR,cohface_to_pure,0.9285714285714285,,1.0
+beat-matching tolerance 0.15 -> 0.20 x RR,ubfc_to_cohface,0.9999999999999998,,1.0
+beat-matching tolerance 0.15 -> 0.20 x RR,pure_to_cohface,0.8571428571428571,,1.0
+SHAPE gate threshold 0.10 -> 0.05,ubfc,0.9444444444444445,,1.0
+SHAPE gate threshold 0.10 -> 0.05,pure,0.8333333333333334,,1.0
+SHAPE gate threshold 0.10 -> 0.05,cohface,0.7222222222222222,,1.0
+SHAPE gate threshold 0.10 -> 0.05,pure_to_ubfc,0.8571428571428571,,1.0
+SHAPE gate threshold 0.10 -> 0.05,cohface_to_ubfc,0.9999999999999998,,1.0
+SHAPE gate threshold 0.10 -> 0.05,ubfc_to_pure,0.6428571428571428,,0.0
+SHAPE gate threshold 0.10 -> 0.05,cohface_to_pure,0.5714285714285714,,1.0
+SHAPE gate threshold 0.10 -> 0.05,ubfc_to_cohface,0.5640760748177661,,1.0
+SHAPE gate threshold 0.10 -> 0.05,pure_to_cohface,0.4999999999999999,,1.0
+SHAPE gate threshold 0.10 -> 0.20,ubfc,0.9444444444444445,,1.0
+SHAPE gate threshold 0.10 -> 0.20,pure,0.7222222222222222,,1.0
+SHAPE gate threshold 0.10 -> 0.20,cohface,0.611111111111111,,1.0
+SHAPE gate threshold 0.10 -> 0.20,pure_to_ubfc,0.4999999999999999,,0.0
+SHAPE gate threshold 0.10 -> 0.20,cohface_to_ubfc,0.9285714285714285,,1.0
+SHAPE gate threshold 0.10 -> 0.20,ubfc_to_pure,0.5714285714285714,,0.0
+SHAPE gate threshold 0.10 -> 0.20,cohface_to_pure,0.7857142857142856,,1.0
+SHAPE gate threshold 0.10 -> 0.20,ubfc_to_cohface,,,0.0
+SHAPE gate threshold 0.10 -> 0.20,pure_to_cohface,0.7142857142857142,,1.0

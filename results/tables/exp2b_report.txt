@@ -1,0 +1,25 @@
+======================================================================
+Experiment 2b - primary criterion B1 (UBFC and PURE, within-dataset)
+======================================================================
+  units 360 / 450 (excluded because predicted or reference PRV could not be computed: 90), participants 48
+  B1 partial rho(RHY, PRV error | 1-WCR, 1-WCR_aligned, SHAPE, HR MAE, RMSE) = 0.156 [-0.093, 0.367]  -> not met
+
+======================================================================
+Secondary (reported only)
+======================================================================
+  [Spearman rho with the PRV error, primary set]
+    RHY       ρ = +0.360 [+0.156, +0.532]
+    F1        ρ = -0.354 [-0.529, -0.148]
+    nIBIE     ρ = +0.275 [+0.094, +0.447]
+    bWCR      ρ = +0.359 [+0.174, +0.523]
+    bWCRa     ρ = +0.343 [+0.137, +0.522]
+    sh_SHAPE  ρ = +0.310 [+0.100, +0.505]
+    HR_MAE    ρ = +0.278 [+0.059, +0.474]
+    RMSE      ρ = +0.359 [+0.174, +0.524]
+    sub-score F1 partial rho = -0.136 [-0.349, +0.123]
+    sub-score nIBIE partial rho = +0.116 [-0.059, +0.297]
+    UBFC within n= 270  B1 partial rho = 0.182 [-0.069, 0.352]
+    PURE within n=  90  B1 partial rho = 0.503 [0.025, 0.695]
+    cross    n= 789  B1 partial rho = 0.111 [-0.061, 0.275]
+  [sensitivity: 90 missing predicted PRV included as worst error] B1 partial rho = 0.116
+  [missing predicted PRV rate by model]  {'bilstm': 0.04, 'bimamba': 0.12, 'bimamba_blend': 0.1, 'lstm': 0.1, 'mamba': 0.18, 'physdiff': 0.28, 'pos': 0.66, 'rnn': 0.12, 'transformer': 0.2}

@@ -1,0 +1,11 @@
+# Separate environment for experiments/exp2_extract.py, exp2b_extract.py, exp2c_extract.py.
+# pyPPG 1.0.14 is not compatible with pandas 3 / NumPy >= 2.3 (it also uses the removed np.NaN / np.Inf aliases,
+# which exp2_extract.py restores). Example (Windows):
+#   python -m venv ppgenv
+#   ppgenv\Scripts\pip install -r requirements-pyppg.txt
+pyPPG==1.0.14
+pandas==2.2.3
+numpy<2.3
+scipy
+dotmap
+mne

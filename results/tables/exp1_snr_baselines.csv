@@ -1,0 +1,15 @@
+eval,features,BA,lo,hi
+P1 COHFACE (subject-disjoint hold-out),RPFI profile,0.799383388667901,,
+P1 COHFACE (subject-disjoint hold-out),conventional,0.40633137176853945,,
+P1 COHFACE (subject-disjoint hold-out),SNR,0.4396032646688903,,
+P1 COHFACE (subject-disjoint hold-out),conventional + SNR,0.4296228552134859,,
+P1 COHFACE (subject-disjoint hold-out),conventional + SNR + RPFI,0.7973533388152759,,
+P1 COHFACE (subject-disjoint hold-out),delta: RPFI profile - conventional,0.3930520168993616,0.336027916172942,0.444686367027614
+P1 COHFACE (subject-disjoint hold-out),delta: RPFI profile - conventional + SNR,0.3697605334544151,0.2757884227916656,0.4546795726377049
+P2 PURE (hold-out),RPFI profile,0.723485007846992,,
+P2 PURE (hold-out),conventional,0.35968163268428316,,
+P2 PURE (hold-out),SNR,0.428028231322438,,
+P2 PURE (hold-out),conventional + SNR,0.4689097207082818,,
+P2 PURE (hold-out),conventional + SNR + RPFI,0.7870807022643449,,
+P2 PURE (hold-out),delta: RPFI profile - conventional,0.36380337516270883,0.2708576712750454,0.4625373619805863
+P2 PURE (hold-out),delta: RPFI profile - conventional + SNR,0.2545752871387102,0.1726604851020639,0.33907219375220005
