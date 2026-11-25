@@ -24,6 +24,19 @@ leakage check: passed
     shape notch_attenuation   0.04   0.68   0.28
           peak_broadening     0.03   0.00   0.97
           peak_sharpening     0.23   0.61   0.16
+    RPFI+dt classifier, prediction share per distortion:
+    col_0                    drift  local  shape
+    g     distortion                            
+    drift constant_lag        0.67   0.00   0.33
+          hr_error            0.98   0.00   0.02
+          rsa_removal         0.48   0.21   0.31
+    local extra_beats         0.00   1.00   0.00
+          ibi_jitter          0.00   0.74   0.26
+          missed_beats        0.00   1.00   0.00
+          white_noise         0.03   0.89   0.08
+    shape notch_attenuation   0.06   0.29   0.65
+          peak_broadening     0.20   0.01   0.79
+          peak_sharpening     0.16   0.41   0.44
   P2  PURE hold-out, recording-disjoint  (cases 380, recordings 19, subjects 10)
     RPFI      BA = 0.653  [0.624, 0.677]
     conv      BA = 0.678  [0.649, 0.709]
@@ -48,3 +61,16 @@ leakage check: passed
     shape notch_attenuation   0.03   0.84   0.13
           peak_broadening     0.21   0.00   0.79
           peak_sharpening     0.11   0.45   0.45
+    RPFI+dt classifier, prediction share per distortion:
+    col_0                    drift  local  shape
+    g     distortion                            
+    drift constant_lag        0.58   0.00   0.42
+          hr_error            1.00   0.00   0.00
+          rsa_removal         0.58   0.18   0.24
+    local extra_beats         0.00   1.00   0.00
+          ibi_jitter          0.00   0.74   0.26
+          missed_beats        0.00   1.00   0.00
+          white_noise         0.00   1.00   0.00
+    shape notch_attenuation   0.05   0.76   0.18
+          peak_broadening     0.34   0.00   0.66
+          peak_sharpening     0.05   0.34   0.61

@@ -143,8 +143,10 @@ def evaluate(name, tr, te):
     P("    CCC of the cases by family (median [IQR]): " + ", ".join(
         f"{g} {q[0.5]:.3f} [{q[0.25]:.3f}, {q[0.75]:.3f}]"
         for g, q in te.groupby("g").CCC.quantile([0.25, 0.5, 0.75]).unstack().iterrows()))
-    P("    RPFI classifier, prediction share per distortion:")
-    P("    " + pd.crosstab([te.g, te.distortion], pr["RPFI"], normalize="index").round(2).to_string().replace("\n", "\n    "))
+    for k in ("RPFI", "RPFI+dt"):
+        if k in pr:
+            P(f"    {k} classifier, prediction share per distortion:")
+            P("    " + pd.crosstab([te.g, te.distortion], pr[k], normalize="index").round(2).to_string().replace("\n", "\n    "))
 
 
 def main():
