@@ -61,7 +61,10 @@ def main():
     pri = pri.merge(snr, on=K, how="left", validate="1:1")
     hn = pd.read_csv(C.RES / "scores" / "hr_participant_ALL.csv")[K + ["HR_MAE_bpm"]].rename(columns={"HR_MAE_bpm": "HR_MAE_new"})
     pri = pri.merge(hn, on=K, how="left", validate="1:1")
-    assert pri.SNR_dB.notna().all() and pri.HR_MAE_new.notna().all()
+    rr = pd.read_csv(C.RES / "scores" / "rpfi_v2_ALL.csv")[K + ["rr_med_s"]]       # median reference RR interval
+    pri = pri.merge(rr, on=K, how="left", validate="1:1")
+    pri["HR_ref"] = 60.0 / pri.rr_med_s
+    assert pri.SNR_dB.notna().all() and pri.HR_MAE_new.notna().all() and pri.HR_ref.notna().all()
     tests = {
         "E1 rho(SHAPE, morph error)": lambda d: spearmanr(d.sh_SHAPE, d.MORPH_ERR)[0],
         "E2 partial rho | HR MAE, RMSE, Pearson": lambda d: A.partial_spearman(d.sh_SHAPE.values, d.MORPH_ERR.values, d[A.CONV].values),
@@ -72,6 +75,11 @@ def main():
         "rho(HR MAE interpolated, morph error)": lambda d: spearmanr(d.HR_MAE_new, d.MORPH_ERR)[0],
         "E2 partial rho | HR MAE interpolated, RMSE, Pearson": lambda d: A.partial_spearman(
             d.sh_SHAPE.values, d.MORPH_ERR.values, d[["HR_MAE_new", "RMSE", "Pearson"]].values),
+        # participant heart rate (reference HR) as an additional control (Supplementary Sec. S9)
+        "E1 partial rho | participant HR": lambda d: A.partial_spearman(
+            d.sh_SHAPE.values, d.MORPH_ERR.values, d[["HR_ref"]].values),
+        "E2 partial rho | HR MAE, RMSE, Pearson, participant HR": lambda d: A.partial_spearman(
+            d.sh_SHAPE.values, d.MORPH_ERR.values, d[A.CONV + ["HR_ref"]].values),
     }
     print(f"  Experiment 2: {len(pri)} units, {pri.participant_key.nunique()} participants, features {feats}")
     for name, fn in tests.items():
