@@ -17,7 +17,7 @@ WIDE_BAND = (0.5, 8.0)
 N_PHASE = 64          # resample one beat to 64 points (phase normalization: resolution independent of HR and fs)
 
 
-COH_MIN = 0.10        # minimum phase coherence: unrelated-signal null p95 ~ 0.03, white noise 2 SD p05 ~ 0.23
+COH_MIN = 0.10        # minimum phase coherence: unrelated-signal null p95 ~ 0.04, white noise 2 SD p05 ~ 0.31 (analysis/coherence_check.py)
 
 
 def prep_wide(x, fs, band=WIDE_BAND):
